@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Mars.py: Kernel management for the Mars system
+# spyceman/planets/mars.py: Kernel management for the Mars system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Mars: Support for Mars-specific kernels.
+spyceman.planets.mars: Support for Mars-specific kernels.
 
 The following attributes are defined:
 
@@ -22,7 +22,7 @@ spk()           a Kernel object derived from one or more Mars SPK files.
 pck()           a Kernel object derived from one or more Mars PCK files
 """
 
-from kernel import KernelFile, KTuple, make_func
+from spyceman import CSPYCE, KTuple, spicefunc
 
 # Categorize moons
 CLASSICAL   = {401, 402}

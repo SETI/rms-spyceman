@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Saturn.py: Kernel management for the Saturn system
+# spyceman/planets/saturn.py: Kernel management for the Saturn system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Saturn: Support for Saturn-specific kernels.
+Support for Saturn-specific kernels.
 
 The following attributes are defined:
 
@@ -22,20 +22,18 @@ spk()           a Kernel object derived from one or more Saturn SPK files.
 
 In addition, the NAIF body ID of every moon can be reference by name:
 
-Mimas           601, the body ID of Mimas.
-Enceladus       602, the body ID of Enceladus.
+MIMAS           601, the body ID of Mimas.
+ENCELADUS       602, the body ID of Enceladus.
 S2004_S01       65093, the body ID of S/2004 S 1.
 """
 
-from kernel.cspyce     import CSPYCE
-from kernel.kernelfile import KTuple
-from kernel.spicefunc  import spicefunc
+from spyceman import CSPYCE, KTuple, spicefunc
 
 ##########################################################################################
 # Managed list of known updates to SPICE names and IDs.
 ##########################################################################################
 
-ALIASES = [
+_SATURN_ALIASES = [
     # (new code, old code), (formal name, NAIF name)
     [[  636, 65038], ['AEGIR'    , 'S10_2004' ]],
     [[  637, 65039], ['BEBHIONN' , 'S11_2004' ]],
@@ -85,25 +83,25 @@ ALIASES = [
     [[65093,      ], [             'S2004_S01']],
 ]
 
-def srange(*args):
+def _srange(*args):
     return set(range(*args))
 
 # Define aliases within cspyce; save complete list of NAIF IDs
-ALL_MOONS = srange(601, 660)
-for (naif_ids, names) in ALIASES:
-    CSPYCE.define_body_aliases(*(names + naif_ids))
-    ALL_MOONS |= set(naif_ids)
+ALL_MOONS = _srange(601, 660)
+for (_naif_ids, _names) in _SATURN_ALIASES:
+    CSPYCE.define_body_aliases(*(_names + _naif_ids))
+    ALL_MOONS |= set(_naif_ids)
 
 # Categorize moons
-CLASSICAL = srange(601, 610)                        # includes Phoebe (609)
-SMALL_INNER = srange(610, 619) | srange(632, 636) | {649, 653}
+CLASSICAL = _srange(601, 610)                       # includes Phoebe (609)
+SMALL_INNER = _srange(610, 619) | _srange(632, 636) | {649, 653}
 UNNAMED = set()
-for (naif_ids, names) in ALIASES:
-    if '_' in names[0]:
-        UNNAMED |= set(naif_ids)
+for (_naif_ids, _names) in _SATURN_ALIASES:
+    if '_' in _names[0]:
+        UNNAMED |= set(_naif_ids)
 
-IRREGULAR = (srange(619, 632) | srange(636, 649) | srange(650, 653) |
-             srange(654, 667) | UNNAMED)            # also includes Phoebe
+IRREGULAR = (_srange(619, 632) | _srange(636, 649) | _srange(650, 653) |
+             _srange(654, 667) | UNNAMED)           # also includes Phoebe
 REGULAR = ALL_MOONS - IRREGULAR
 
 ID          = 699
@@ -112,20 +110,16 @@ ALL_IDS     = {ID} | ALL_MOONS
 BARYCENTER  = 6
 
 # Define every moon's name as an attribute
-for naif_id in ALL_MOONS:
-    aliases = CSPYCE.get_body_aliases(naif_id)
-    for alias in aliases:
-        if isinstance(alias, str):
-            # Fix the capitalization
-            if '_' not in alias:
-                alias = alias.capitalize()
-            locals()[alias] = naif_id
+for _naif_id in ALL_MOONS:
+    (_naif_ids, _aliases) = CSPYCE.get_body_aliases(_naif_id)
+    for _alias in _aliases:
+        locals()[_alias] = _naif_id
 
 ##########################################################################################
 # Managed list of known SATnnn SPK kernels
 ##########################################################################################
 
-ktuples = [
+_SATURN_KTUPLES = [
 
 KTuple('sat060.bsp',
     '1996-01-01T00:00:00', '2005-01-01T00:00:00',
@@ -540,7 +534,7 @@ KTuple('sat452.bsp',
 
 spk = spicefunc('spk', pattern=r'sat(\d\d\d).*\.bsp', title='Saturn system SPKs',
                 bodies=ALL_IDS, exclusive=False, ordered=True, reduce=True,
-                basenames=basenames, use_others=True, missing='ignore',
+                basenames=_SATURN_KTUPLES, use_others=True, missing='ignore',
                 properties={'planet': 'Saturn'})
 
 ##########################################################################################

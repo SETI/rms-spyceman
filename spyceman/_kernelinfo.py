@@ -1,5 +1,5 @@
 ##########################################################################################
-# kernel/_kernelinfo.py
+# spyceman/_kernelinfo.py
 ##########################################################################################
 """_KernelInfo class to hold attributes of SPICE kernel files."""
 
@@ -15,16 +15,21 @@ import julian
 import textkernel
 
 from spyceman.rule    import Rule, _DefaultRule
-from spyceman._ktypes import _EXTENSIONS
+from spyceman._ktypes import _EXTENSIONS, _KTYPES
+from spyceman._utils  import validate_release_date, validate_version, \
+                             naif_ids_with_aliases, naif_ids_wo_aliases
 
 
 class _KernelInfo(object):
 
     ABSPATHS = {}               # basename -> abspath
-    BASENAMES_BY_KTYPE = {}     # ktype -> set of associated basenames
     KERNELINFO = {}             # basename -> unique _KernelInfo object
+    BASENAMES_BY_KTYPE = {}     # ktype -> set of associated basenames
+    for ktype in _KTYPES:
+        BASENAMES_BY_KTYPE[ktype] = set()
 
-    # Configuration attributes for how to use information from rules
+    # Configuration attributes for how to use information from rules;
+    # mainly for debugging but also used by summarizer.py.
     _USE_RULES           = True
     _USE_DEFAULT_RULES   = True
     _USE_INTERNAL_DATES  = True
@@ -51,7 +56,8 @@ class _KernelInfo(object):
         self._dict_content = None
 
         self._naif_ids = None
-        self._naif_ids_without_aliases = None
+        self._naif_ids_wo_aliases = None
+        self._naif_ids_as_found = None
         self._time = None
         self._release_date = None
         self._version = None
@@ -64,6 +70,7 @@ class _KernelInfo(object):
         self.__rule_values = None
         self.__default_values = None
         self._properties = None
+        self._prev_properties = None
 
         # Track manual definitions for cases where an abspath changes
         self._manual_defs = []
@@ -315,6 +322,8 @@ class _KernelInfo(object):
         # LSKs are applicable to all NAIF IDs
         if self.ktype == 'LSK':
             self._naif_ids = set()
+            self._naif_as_found = set()
+            self._naif_wo_aliases = set()
             return self._naif_ids
 
         # In any other case, file access is needed
@@ -335,12 +344,12 @@ class _KernelInfo(object):
                 if basename not in _KernelInfo.ABSPATHS:
                     raise FileNotFoundError('file referenced in metakernel '
                                             f'{self._basename} not found: ' + basename)
-                naif_ids |= _KernelInfo.KERNELINFO[basename].naif_ids
+                naif_ids |= _KernelInfo.KERNELINFO[basename].naif_ids_as_found
 
         elif self.is_text:              # any text kernel
             naif_ids = self._naif_ids_from_text_kernel()
             if not naif_ids:
-                naif_ids = {0}
+                naif_ids = {}
 
         else:                           # some weird binary kernel
             naif_ids = set()
@@ -367,8 +376,9 @@ class _KernelInfo(object):
 
             self._time = (tmin, tmax)   # also define the time limits
 
-        self._naif_ids_without_aliases = naif_ids
-        self._naif_ids = _KernelInfo._all_id_aliases(naif_ids)
+        self._naif_ids_as_found = naif_ids
+        self._naif_ids = naif_ids_with_aliases(naif_ids)
+        self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
         return self._naif_ids
 
     @naif_ids.setter
@@ -382,40 +392,46 @@ class _KernelInfo(object):
         else:
             self._naif_ids = set(ids)
 
-        self._naif_ids = _KernelInfo._all_id_aliases(self._naif_ids)
+        self._naif_ids_as_found |= ids
+        self._naif_ids = naif_ids_with_aliases(ids)
+        self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
         self._manual_defs.append(('_naif_ids', self._naif_ids))
 
     def add_naif_ids(self, *ids):
         """Add one or more NAIF IDs to the set."""
 
-        ids = _KernelInfo._all_id_aliases(ids)
-
-        if self._naif_ids is None:
-            self._naif_ids = ids
-        else:
-            self._naif_ids |= ids
-
-        self._manual_defs.append(('add_naif_ids', *ids))
+        ids = set(ids)
+        self._naif_ids_as_found |= ids
+        self._naif_ids |= naif_ids_with_aliases(ids)
+        self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
+        self._manual_defs.append(('add_naif_ids',) + ids)
 
     def remove_naif_ids(self, *ids):
         """Remove one or more NAIF IDs from the set."""
 
-        ids = _KernelInfo._all_id_aliases(ids)
-
-        if self._naif_ids is None:
-            return
-
-        self._naif_ids -= ids
-        self._manual_defs.append(('remove_naif_ids', *ids))
+        ids = set(ids)
+        self._naif_ids_as_found -= ids
+        self._naif_ids = naif_ids_with_aliases(self._naif_ids_as_found)
+        self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
+        self._manual_defs.append(('remove_naif_ids',) + ids)
 
     @property
-    def naif_ids_without_aliases(self):
+    def naif_ids_wo_aliases(self):
         """The set of all NAIF IDs described by the file, excluding aliases."""
 
-        if self._naif_ids_without_aliases is None:
+        if self._naif_ids_wo_aliases is None:
             _ = self.naif_ids
 
-        return self._naif_ids_without_aliases
+        return self._naif_ids_wo_aliases
+
+    @property
+    def naif_ids_as_found(self):
+        """The exact set of NAIF IDs described by the file, before handing aliases."""
+
+        if self._naif_ids_as_found is None:
+            _ = self.naif_ids
+
+        return self._naif_ids_as_found
 
     _BODY_FRAME_INS = re.compile(r' *(?:FRAME|BODY|INS)_?(-?\d+)_', re.I)
     _SCLK_DATA_TYPE = re.compile(r' *SCLK_DATA_TYPE_(\d+)', re.I)
@@ -464,24 +480,6 @@ class _KernelInfo(object):
 
         return naif_ids
 
-    @staticmethod
-    def _all_id_aliases(ids):
-
-        all_ids = set(ids)
-        for naif_id in ids:
-            all_ids |= set(cspyce.get_body_aliases(naif_id)[0])
-
-            # Insert the spacecraft ID for any spacecraft frame ID
-            if naif_id < -1000:
-                all_ids.add(-(-naif_id//1000))
-
-        # Include body IDs for frame IDs, but not the other way around
-        if any(i for i in all_ids if i >= 10000 and i < 50000):
-            for naif_id in ids:
-                all_ids |= set(cspyce.get_frame_aliases(naif_id)[0])
-
-        return all_ids
-
     ######################################################################################
     # Time range
     ######################################################################################
@@ -525,8 +523,8 @@ class _KernelInfo(object):
 
         # Handle SPK
         if self.ktype == 'SPK':
-            for naif_id in self.naif_ids_without_aliases:
-                for (t0, t1) in cspyce.spkcov(self.abspath, naif_id):
+            for naif_id in self.naif_ids_as_found:
+                for (t0, t1) in cspyce.spkcov(self.abspath, naif_id).as_intervals():
                     tmin = min(tmin, t0)
                     tmax = max(tmax, t1)
 
@@ -536,19 +534,20 @@ class _KernelInfo(object):
         elif self.ktype == 'CK':
 
             # Note that this only works if a SCLK has been furnished!
-            for naif_id in self.naif_ids_without_aliases:
+            for naif_id in self.naif_ids_as_found:
                 try:
                     times = cspyce.ckcov(self.abspath, naif_id, needav=False,
-                                         level='INTERVAL', tol=0., timsys='TDB')
-                    for (t0, t1) in times:
-                        tmin = min(tmin, t0)
-                        tmax = max(tmax, t1)
-
+                                         level='INTERVAL', tol=0., timsys='TDB',
+                                         cover=50000)   # 20000 isn't enough for Voyager!
                 except KeyError:
                     raise RuntimeError('Unable to determine time limits for '
                                        + self._basename
-                                       + '; clock kernel must be furnishded for ID '
+                                       + '; clock kernel must be furnished for ID '
                                        + str(naif_id))
+                else:
+                    for (t0, t1) in times.as_intervals():
+                        tmin = min(tmin, t0)
+                        tmax = max(tmax, t1)
 
             self._time = (tmin, tmax)
 
@@ -625,17 +624,18 @@ class _KernelInfo(object):
             return self._release_date
 
         # 2. Check the most reliable internal comment fields
-        daylist = []
-        for rec in self.comments + self.label:
-            for match_pattern in ('SATEPHMERGE', 'SATMERGE', 'SATGEN', 'Release to',
-                                  '; Created ', 'Run Date:', 'CREATION_TIME'):
+        for match_pattern in ('; Created ', 'Release to: Horizons', 'DELIVERY DATE:',
+                              'SATEPHMERGE', 'SATMERGE', 'SATGEN',
+                              'Run Date:', 'PRODUCT_CREATION_TIME'):
+            daylist = []
+            for rec in self.label + self.comments:
                 if match_pattern in rec:
                     daylist += julian.days_in_strings(rec)
 
-        daylist = [d for d in daylist if d > _KernelInfo._JANUARY_1995]
-        if daylist:
-            self._release_date = julian.format_day(min(daylist))
-            return self._release_date
+            daylist = [d for d in daylist if d > _KernelInfo._JANUARY_1995]
+            if daylist:
+                self._release_date = julian.format_day(max(daylist))
+                return self._release_date
 
         # 3. This appears to work reliably in SLCKs
         if self.ktype == 'SCLK':
@@ -685,21 +685,11 @@ class _KernelInfo(object):
 
         return ''
 
-    @property
-    def _validate_release_date(date):
-        """Format the given release date properly."""
-
-        if date:
-            (day, _) = julian.day_sec_from_string(date)
-            self._release_date = julian.format_day(day)
-        else:
-            return ''
-
     @release_date.setter
     def release_date(self, date):
         """Define the release date for this kernel file."""
 
-        self._release_date = _KernelInfo._validate_release_date(date)
+        self._release_date = _utils.validate_release_date(date)
         self._manual_defs.append(('_release_date', self._release_date))
 
     ######################################################################################
@@ -724,52 +714,15 @@ class _KernelInfo(object):
 
         return self._version
 
-    @staticmethod
-    def _validate_version(version):
-
-        if version is None:
-            return ''
-
-        if isinstance(version, numbers.Integral):
-            if version < 0:
-                raise ValueError('version cannot be negative: ' + version)
-
-            return int(version)
-
-        if isinstance(version, (tuple, list)):
-            if len(version) == 0:
-                raise ValueError('version tuple is empty')
-
-            version = tuple(version)
-            if not all((isinstance(i, numbers.Integral) for i in value)):
-                raise ValueError('version as a tuple must contain integers: '
-                                 + repr(version))
-            if not all((i >= 0 for i in value)):
-                raise ValueError('version cannot be negative: ' + repr(version))
-
-            if len(version) == 1:
-                return int(version[0])
-
-            return tuple(int(i) for i in version)
-
-        if not isinstance(version, str):
-            raise TypeError('invalid version, must be string, int, or tuple of ints: '
-                            + repr(value))
-
-        # Convert a dot-separated string of ints to a tuple
-        parts = version.split('.')
-        try:
-            test = [int(p) for p in parts]
-        except ValueError:
-            return pass
-        else:
-            return _KernelInfo._validate_version(test)
-
-        return version
+    @property
+    def version_set(self):
+        if isinstance(self.version, set):
+            return self.version
+        return {self.version}
 
     @version.setter
     def version(self, value):
-        self._version = _KernelInfo._validate_version(value)
+        self._version = _utils.validate_version(value)
         self._manual_defs.append(('_version', self._version))
 
     @property
@@ -784,7 +737,7 @@ class _KernelInfo(object):
         elif 'family' in self._default_values:
             self._family = self._default_values['family']
         else:
-            self._family = ''
+            self._family = self._basename
 
         return self._family
 
@@ -800,19 +753,41 @@ class _KernelInfo(object):
     # Custom properties
     ######################################################################################
 
+    # We define a dict subclass so that we can track when a property is added or deleted
+    # manually.
+    class _local_dict(dict):
+        def __setitem__(self, key, value):
+            self.add_property(key, value)
+        def __delitem__(self, key):
+            self.remove_property(key)
+
     @property
     def properties(self):
         """The dictionary of special properties for this kernel file."""
 
-        if self._properties is None:
-            properties = self._rule_values.copy()
-            for key in ('date', 'time', 'version', 'family'):
-                if key in properties:
-                    del properties[key]
+        if self._rule_properties is None:
+            self._rule_properties = {}
+            for key, value in self._rule_values.items():
+                if key in ('date', 'time', 'version', 'family'):
+                    continue
+                self._rule_properties[key] = value
 
-            self._properties = properties
+            if self._properties is None:
+                self._properties = _KernelInfo.local_dict()
 
         return self._properties
+
+    def add_property(self, name, value):
+        """Add or modify a property, same as "self.properties[name] = value"."""
+
+        super(_local_dict, self.properties).__setitem__(name, value)
+        self._manual_defs.append(('add_property', name, value))
+
+    def remove_property(self, name):
+        """Remove a property, same as "del self.properties[name]"."""
+
+        super(_local_dict, self.properties).__delitem__(name)
+        self._manual_defs.append(('remove_property', name))
 
     ######################################################################################
     # Metakernel support
@@ -849,7 +824,7 @@ class _KernelInfo(object):
         """True if this string appears to be a valid kernel file basename."""
 
         return (isinstance(basename, str)
-                and bool(_KernelInfo.BASENAME_REGEX.match(basename))
+                and bool(_KernelInfo.BASENAME_REGEX.match(basename)))
 
     @staticmethod
     def basename_ext(basename):
@@ -882,5 +857,21 @@ class _KernelInfo(object):
             pattern = re.compile(pattern, flags=flags)
 
         basenames = {b for b in _KernelInfo.ABSPATHS if pattern.match(b)}
+
+    @staticmethod
+    def replace(basename, abspath):
+        """Replace an existing KernelFile with the same basename as this abspath.
+        """
+
+        manual_defs = _KernelInfo.KERNELINFO[basename]._manual_defs
+        del _KernelInfo.KERNELINFO[basename]
+
+        new_object = _KernelInfo(basename)
+        for item in manual_defs:
+            name = item[0]
+            if name in new_object.__dict__:
+                new_object.__dict__[name] = item[1]
+            else:
+                _KernelInfo.__dict__[name](new_object, *item[1:])
 
 ##########################################################################################

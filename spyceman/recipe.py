@@ -10,7 +10,6 @@ from spyceman.kernelstack import KernelStack
 from spyceman.metakernel  import Metakernel
 from spyceman._ktypes     import _KTYPES
 
-# Imports of _localfiles functions
 import re
 _NUMBERED_NAME = re.compile(r'(.*) (\d+)')
 
@@ -211,6 +210,9 @@ class Recipe:
             raise ValueError(f'Recipe named "{name}" already exists"')
 
         self._name = name
+        self._change_count = 0          # incremented for each modification
+        self._tkdict_count = -1         # the index for the latest text kernels
+        self._tkdict = None
 
         if isinstance(reference, str):
             reference = Recipe._RECIPES[reference]
@@ -220,10 +222,6 @@ class Recipe:
         for ktype in _KTYPES:           # define an attribute for each ktype
             setattr(self, '_' + ktype, [])
         self._append(*kernels)
-
-        self._change_count = 0          # incremented for each modification
-        self._tkdict_count = -1         # the index for the latest text kernels
-        self._tkdict = None
 
         if select:
             Recipe._SELECTION = name
@@ -547,7 +545,7 @@ class Recipe:
             kstack = KernelStack(self._name + '_' + ktype, *kernels)
             basenames += kstack.used(tmin=tmin, tmax=tmax, ids=ids)
 
-        return basename
+        return basenames
 
 
 # Define each ktype as a property

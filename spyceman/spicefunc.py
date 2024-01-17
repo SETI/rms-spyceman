@@ -1,6 +1,8 @@
 ##########################################################################################
-# spyceman/maker.py
+# spyceman/spicefunc.py
 ##########################################################################################
+
+import re
 
 from spyceman.kernelfile import KernelFile
 from spyceman.kernelset  import KernelSet
@@ -14,21 +16,18 @@ DOCSTRING_TEMPLATE = """\
 
 {NOTES}
     Inputs:
-{PROPERTIES}\
-        name        select one or more {TITLE} files by name:
-                    - a single basename or version number for that pre-defined Kernel
-                      object;
-                    - "latest" for the default Kernel object;
-                    - a regular expression to filter the available kernel basenames and
+        key         select one or more {TITLE} files by name, family, or version number.
+                    - "local" for all kernel files;
+                    - a version number to restrict the kernel selection to files with
+                      that version identification;
+                    - the name of a single Kernel object or basename;
+                    - a regular expression used to filter the available basenames and
                       return a new KernelSet;
-                    - a tuple of one or more regular expressions or basenames, which will
-                      be used to define and return a new KernelSet. Note: in this
-                      context, a string containing only only letters, digits, underscore,
-                      dash, and dot is treated as a literal basename rather than a regular
-                      expression.
-        tmin, tmax  only include kernel files with times overlapping this time interval,
-                    specified in TDB seconds.
-        ids         only include kernel files that refer to one or more of these NAIF IDs.
+                    - a tuple of one or more of the above.
+{PROPERTIES}\
+        tmin, tmax  only include Kernels with times overlapping this time interval,
+                    specified in TDB seconds or date strings.
+        ids         only include Kernels that refer to one or more of these NAIF IDs.
         dates       only include kernel files released within this range of dates. Use a
                     a tuple of two date strings defining the earliest and latest dates to
                     include. Replace either date value with None or an empty string to
@@ -42,6 +41,8 @@ DOCSTRING_TEMPLATE = """\
                     ensure that all of the specified NAIF IDs are covered for the entire
                     time range tmin to tmax. In this case, some constraints on the name,
                     release date, and version might be violated.
+        download    if True and the source of the file is known, download a missing file
+                    while issuing a warning; otherwise, raise a FileNotFoundError.
 """
 
 # This is the template for a kernel-generator function. It allows the same function to be
@@ -49,8 +50,8 @@ DOCSTRING_TEMPLATE = """\
 # make_func, so that each version of the function has its own attributes defining PATTERN,
 # INFO, EXTRAS, etc.
 
-def func_template(func, name=None, *, tmin=None, tmax=None, ids=None, dates=None,
-                        versions=None, expand=False, **properties):
+def func_template(func, name, version, *, tmin=None, tmax=None, ids=None, dates=None,
+                        versions=None, expand=False, download=True, **properties):
 
     # Make sure everything is initialized
     if not func.INITIALIZED:
@@ -77,18 +78,18 @@ def func_template(func, name=None, *, tmin=None, tmax=None, ids=None, dates=None
             pass
 
 
-    if not isinstance(known, (list,tuple)):
-        known = [known]
-
-    for x in known:
-        if hasattr(x, '__call__'):
-
-        if isinstance(x, Kernel):
-
-        if isinstance(x, KTuple):
-
-        if isinstance(x, str):
-
+#     if not isinstance(known, (list,tuple)):
+#         known = [known]
+#
+#     for x in known:
+#         if hasattr(x, '__call__'):
+#
+#         if isinstance(x, Kernel):
+#
+#         if isinstance(x, KTuple):
+#
+#         if isinstance(x, str):
+#
 
 
 
@@ -116,9 +117,11 @@ def func_template(func, name=None, *, tmin=None, tmax=None, ids=None, dates=None
     return KernelSet(basenames, ordered=func.ordered)
 
 
-def spicefunc(funcname, pattern, *, tuples, extras, exclusive, reduce, bodies=set(),
-              title='', propnames=[], docstrings={}, notes='',
-              basenames=None, use_alts=True, missing='warn'):
+def spicefunc(funcname, pattern, title, *, tuples=[], extras=[], exclusive=False, reduce=True, bodies=set(),
+              propnames=[], docstrings={}, notes='', default_naif_ids={}, naif_ids_key=(),
+              default_time={}, time_key=(), known=[], ordered=True, use_others=True,
+              missing='download', properties={},
+              basenames=None):
     """
     Inputs:
         funcname    name of the function, e.g., "spk". Appears in the help message.
@@ -140,15 +143,15 @@ def spicefunc(funcname, pattern, *, tuples, extras, exclusive, reduce, bodies=se
         missing     How to handle missing files.
     """
 
-    def wrapper(name=None, tmin=None, tmax=None, ids=None, dates=None,
+    def wrapper(key=None, *, tmin=None, tmax=None, ids=None, dates=None,
                 versions=None, expand=False, **properties):
-        return func_template(wrapper, name=name, tmin=tmin, tmax=tmax, ids=ids,
+        return func_template(wrapper, tmin=tmin, tmax=tmax, ids=ids,
                              dates=dates, versions=versions, expand=expand, **properties)
 
     wrapper.INITIALIZED = False
     wrapper.FUNCNAME = funcname
     wrapper.PATTERN = re.compile(pattern)
-    wrapper.INFO = info
+#     wrapper.INFO = info
     wrapper.EXTRAS = extras
     wrapper.EXCLUSIVE = exclusive
     wrapper.BODIES = bodies
@@ -186,7 +189,7 @@ def _initialize(func):
 
     # Define the known kernels
     ktuples = [k for k in merged if not isinstance(k, str)]
-    load_ktuples(ktuples)
+    KernelFile.set_info(ktuples)
     known_basenames = [k if isinstance(k,str) else k.basename for k in merged]
 
     # Identify the local kernels

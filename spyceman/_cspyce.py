@@ -30,13 +30,13 @@ CSPYCE_NAME = ''
 
 if 'SPICEMODULE' in os.environ:
     CSPYCE_NAME = os.environ['SPICEMODULE']
-    CSPYCE = import_cspyce(CSPYCE_NAME)
+    CSPYCE = importlib.import_module(CSPYCE_NAME)
 
 else:
     for name in ('cspyce', 'spicepy'):
         try:
             CSPYCE_NAME = name
-            CSPYCE = import_cspyce(name)
+            CSPYCE = importlib.import_module(name)
         except ModuleNotFoundError:
             pass
 

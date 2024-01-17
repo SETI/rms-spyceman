@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Uranus.py: Kernel management for the Uranus system
+# spyceman/planets/uranus.py: Kernel management for the Uranus system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Uranus: Support for Uranus-specific kernels.
+spyceman.planets.uranus: Support for Uranus-specific kernels.
 
 The following attributes are defined:
 
@@ -22,7 +22,7 @@ spk()           function returning a Kernel object derived from one or more Uran
                 files.
 """
 
-from spyceman.kernelfile import KernelFile, KTuple, spicefunc
+from spyceman import CSPYCE, KTuple, spicefunc
 
 def srange(*args):
     return set(range(*args))

@@ -123,7 +123,7 @@ else:
     _PCK_INFO = [i for i in _PCK_INFO if i.basename != 'pck00011.tpc']
     _PCK_PATTERN = r'pck(0000\d|00010|00011(?=_n0066)).*\.tpc'
 
-pck = spicefunc('pck', pattern=_PCK_PATTERN, 'general NAIF PCKs',
+pck = spicefunc('pck', pattern=_PCK_PATTERN, title='general NAIF PCKs',
                 known=_PCK_INFO, exclusive=True)
 
 ##########################################################################################
@@ -273,10 +273,10 @@ Rule(r'(de|mar|jup|sat|ura|nep|plu)(NNN).*\.bsp')
 _SPK_BODY_IDS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 199, 299, 301, 399}
     # These SPKs no longer include 499, Mars center
 
-basenames = [k.basename for k in SPK_EXTRAS + SPK_KTUPLES]
+basenames = [k.basename for k in _SPK_EXTRAS + _SPK_INFO]
 
-spk = spicefunc('spk', pattern=r'de(\d\d\d).*\.bsp', '"DE" Solar System SPKs',
-                known=_SPK_INFO, extras=_SPK_EXTRAS, ids=_SPK_BODY_IDS,
+spk = spicefunc('spk', pattern=r'de(\d\d\d).*\.bsp', title='"DE" Solar System SPKs',
+                known=_SPK_INFO, extras=_SPK_EXTRAS, default_naif_ids=_SPK_BODY_IDS,
                 exclusive=False, ordered=True, reduce=True)
 
 ##########################################################################################

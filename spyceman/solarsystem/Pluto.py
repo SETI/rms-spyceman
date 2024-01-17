@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Pluto.py: Kernel management for the Pluto system
+# spyceman/planets/pluto.py: Kernel management for the Pluto system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Pluto: Support for Pluto-specific kernels.
+spyceman.planets.pluto: Support for Pluto-specific kernels.
 
 The following attributes are defined:
 
@@ -21,7 +21,7 @@ BARYCENTER      the NAIF ID of the Pluto system barycenter.
 spk()           a Kernel object derived from one or more Pluto's SPK files.
 """
 
-from kernel import KTuple, make_func
+from spyceman import CSPYCE, KTuple, spicefunc
 
 def srange(*args):
     return set(range(*args))

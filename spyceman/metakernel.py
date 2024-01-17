@@ -7,7 +7,7 @@ from spyceman.kernel      import Kernel
 from spyceman.kernelfile  import KernelFile
 from spyceman.kernelset   import KernelSet
 from spyceman.kernelstack import KernelStack
-from spyceman._kernelinfo import _KTYPES
+from spyceman._ktypes     import _KTYPES
 
 class Metakernel(Kernel):
     """Representation of a single SPICE metakernel file."""

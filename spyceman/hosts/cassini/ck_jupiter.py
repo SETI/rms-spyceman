@@ -1,12 +1,10 @@
 ##########################################################################################
-# hosts/cassini/ck_jupiter.py
+# spyceman/hosts/cassini/_CK_JUPITER.py
 ##########################################################################################
-
-from spyceman import make_func
 
 # When two basenames appear on the same line, the second covers a subset of the time
 # limits of the first, but was released later and therefore should take precedence.
-basenames = [
+_CK_JUPITER_BASENAMES = [
     '001001_001004ra.bc',
     '001004_001006ra.bc',
     '001006_001009ra.bc',
@@ -67,14 +65,6 @@ basenames = [
     '010330_010331ra.bc',
     '010331_010402ra.bc',
 ]
-
-CK_JUPITER_PATTERN = r'0[01][01][0-3][0-3]\d_\d{5}(r?[ab]?)\.bc'
-
-ck_jupiter = make_func('ck_jupiter', pattern=CK_JUPITER_PATTERN,
-                       title='Cassini Jupiter CKs',
-                       exclusive=False, ordered=True, reduce=True,
-                       basenames=basenames, use_others=True, missing='warn',
-                       properties={'mission': 'Cassini', 'planet': 'JUPITER'})
 
 ##########################################################################################
 

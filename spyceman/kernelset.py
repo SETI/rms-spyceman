@@ -53,12 +53,9 @@ class KernelSet(Kernel):
 
             self._basenames.append(basename)
 
-        if reduce and not ordered:
-            raise ValueError('KernelSet cannot be reduced if it is not ordered')
-
         # If reduced, we can proceed by eliminating any kernel file that will never be
         # needed.
-        if reduce:
+        if reduce and ordered:
             self._basenames = KernelFile.filter_basenames(self._basenames, ids=ids,
                                                           reduce=True)
 

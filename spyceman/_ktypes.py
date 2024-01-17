@@ -2,8 +2,9 @@
 # spyceman/_ktypes.py
 ##########################################################################################
 
-# This is the order used in metakernels
-_KTYPES = ['META', 'LSK', 'FK', 'IK', 'PCK', 'DSK', 'SCLK', 'CK', 'SPK', 'STAR']
+# This is the order used in metakernels; in general, each ktype appears later in the list
+# than the other ktypes on which it might depend.
+_KTYPES = ['META', 'LSK', 'STAR', 'PCK', 'DSK', 'FK', 'IK', 'SCLK', 'CK', 'SPK']
 
 _EXTENSIONS = {
     '.bc' : 'CK',

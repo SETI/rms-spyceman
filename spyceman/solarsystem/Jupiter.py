@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Jupiter.py: Kernel management for the Jupiter system
+# spyceman/planets/jupiter.py: Kernel management for the Jupiter system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Jupiter: Support for Jupiter-specific kernels.
+spyceman.planets.jupiter: Support for Jupiter-specific kernels.
 
 The following attributes are defined:
 
@@ -13,8 +13,8 @@ GALILEANS       the set of IDs of the Galileo satellites.
 CLASSICAL       same as GALILIEANS.
 SMALL_INNER     the set of IDs of the small inner moons.
 REGULAR         the set of IDs of the regular satellites.
-IRREGULAR       the set of IDs of the Jovian irregular satellites, including
-                their aliases.
+IRREGULAR       the set of IDs of the Jovian irregular satellites, including their
+                aliases.
 UNNAMED         the set of IDs of moons that are not yet officially named.
 ID              the NAIF ID of Jupiter.
 SYSTEM          the set of IDs of the planet and all inner or classical moons.
@@ -25,20 +25,18 @@ spk()           function returning a Kernel object derived from one or more Jupi
 
 In addition, the NAIF body ID of every moon can be reference by name:
 
-Io              501, the body ID of Io.
-Europa          502, the body ID of Europa.
+IO              501, the body ID of Io.
+EUROPA          502, the body ID of Europa.
 S2022_J3        55523, the body ID of S/2022 J 3.
 """
 
-from kernel.cspyce     import CSPYCE
-from kernel.kernelfile import KTuple
-from kernel.spicefunc  import spicefunc
+from spyceman import CSPYCE, KTuple, spicefunc
 
 ##########################################################################################
 # Managed list of known updates to SPICE names and IDs.
 ##########################################################################################
 
-ALIASES = [
+_JUPITER_ALIASES = [
     # Jupiter [new code, old code], [formal name, provisional name]
     [[  549, 55054       ], ['KORE'         , 'S2003_J14']],
     [[  550, 55057       ], ['HERSE'        , 'S2003_J17']],
@@ -89,26 +87,26 @@ ALIASES = [
     [[55523              ], [                 'S2022_J3' ]],
 ]
 
-def srange(*args):
+def _srange(*args):
     return set(range(*args))
 
 # Define aliases within cspyce; save complete list of NAIF IDs
 ALL_MOONS = set(range(501, 573))
-for (naif_ids, names) in ALIASES:
-    cspyce.define_body_aliases(*(names + naif_ids))
-    ALL_MOONS |= set(naif_ids)
+for (_naif_ids, _names) in _JUPITER_ALIASES:
+    CSPYCE.define_body_aliases(*(_names + _naif_ids))
+    ALL_MOONS |= set(_naif_ids)
 
 # Categorize moons
-GALILEANS = srange(501, 505)
+GALILEANS = _srange(501, 505)
 CLASSICAL = GALILEANS
-SMALL_INNER = {505} | srange(514, 518)
+SMALL_INNER = {505} | _srange(514, 518)
 
 UNNAMED = set()
-for (codes, names) in ALIASES:
-    if '_' in names[0]:
-        UNNAMED |= set(naif_ids)
+for (_naif_ids, _names) in _JUPITER_ALIASES:
+    if '_' in _names[0]:
+        UNNAMED |= set(_naif_ids)
 
-IRREGULAR = srange(506, 514) | srange(517, 573) | UNNAMED
+IRREGULAR = _srange(506, 514) | _srange(517, 573) | UNNAMED
 REGULAR   = ALL_MOONS - IRREGULAR
 
 ID         = 599
@@ -117,20 +115,16 @@ ALL_IDS    = {ID} | ALL_MOONS
 BARYCENTER = 5
 
 # Define every moon's name as an attribute
-for naif_id in ALL_MOONS:
-    aliases = CSPYCE.get_body_aliases(naif_id)
-    for alias in aliases:
-        if isinstance(alias, str):
-            # Fix the capitalization
-            if '_' not in alias:
-                alias = alias.capitalize()
-            locals()[alias] = naif_id
+for _naif_id in ALL_MOONS:
+    (_naif_ids, _aliases) = CSPYCE.get_body_aliases(_naif_id)
+    for _alias in _aliases:
+        locals()[_alias] = _naif_id
 
 ##########################################################################################
 # Managed list of known JUPnnn SPK kernels
 ##########################################################################################
 
-SPK_INFO = [
+_JUPITER_KTUPLES = [
 
 KTuple('jup068.bsp',
     '1995-01-01T00:00:00', '2002-01-02T23:59:57',
@@ -378,6 +372,6 @@ KTuple('jup365.bsp',
 ]
 
 spk = spicefunc('spk', pattern=r'jup(\d\d\d).*\.bsp', title='Jupiter system SPKs',
-                info=SPK_INFO, exclusive=False, bodies=ALL_IDS)
+                tuples=_JUPITER_KTUPLES, exclusive=False, bodies=ALL_IDS)
 
 ##########################################################################################

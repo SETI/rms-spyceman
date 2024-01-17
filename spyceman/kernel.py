@@ -9,7 +9,8 @@ import numpy as np
 import re
 
 from spyceman._cspyce     import CSPYCE
-from spyceman._kernelinfo import _KernelInfo, _KTYPES
+from spyceman._kernelinfo import _KernelInfo
+from spyceman._ktypes     import _KTYPES
 
 # Dictionary ktype -> ordered list of basenames currently furnished in cspyce
 _FURNISHED_BASENAMES = {key:{} for key in _KTYPES}
@@ -203,6 +204,7 @@ class Kernel(object):
     def version(self, value):
         self._version = _KernelInfo._validate_version(value)
 
+    @property
     def family(self):
         """The family name of this kernel object. Typically, kernels with a different
         version or time range often are members of the same family.

@@ -14,7 +14,42 @@ from spyceman._kernelinfo import _KernelInfo
 from spyceman._ktypes     import _EXTENSIONS
 
 _ROOTS = set()          # the set of directory roots that have been walked
+_INITIALIZED = False    # True if initialize() has been called
+_WARNED = False         # True if a warning has been issued
 
+
+def initialize(option='ignore'):
+    """Walk the list of directories defined by environment variable "SPICEPATH".
+
+    Input:
+        option      how to handle a missing SPICEPATH environment variable:
+                        "ignore"        ignore it;
+                        "warn"          issue a warning;
+                        "error"         raise a RuntimeError.
+    """
+
+    global _INITIALIZED, _WARNED
+
+    if _INITIALIZED:
+        return
+
+    if 'SPICEPATH' in os.environ:
+        roots = ':'.split(os.environ['SPICEPATH'])
+        for root in roots:
+            KernelFile.walk(root)
+        _INITIALIZED = True
+
+    elif option == 'ignore':
+        return
+
+    else:
+        message = 'missing environment variable "SPICEPATH"'
+        if option == 'warn':
+            if not _WARNED:
+                warnings.warn(message)
+                _WARNED = True
+        else:
+            raise RuntimeError(message)
 
 def walk(*directories, translator=None, override=False):
     """Walk one or more directory trees and update the global dictionary of SPICE
@@ -61,7 +96,7 @@ def use_path(path, newname=None, override=False, ignore=False):
     """
 
     if not os.path.exists(path):
-        raise FileNotFoundError('file not found: ' + repr(path))
+        raise FileNotFoundError('SPICE file not found: ' + repr(path))
 
     abspath = os.path.abspath(os.path.realpath(path))
 
@@ -79,11 +114,14 @@ def use_path(path, newname=None, override=False, ignore=False):
 
     # Check for a duplicated basename with different content
     if basename in _KernelInfo.ABSPATHS:
-        if not override:
-            old_abspath = _KernelInfo.ABSPATHS[basename]
-            if old_abspath == abspath:
-                return
+        old_abspath = _KernelInfo.ABSPATHS[basename]
+        if old_abspath == abspath:
+            return
 
+        if override:
+            _KernelInfo.replace(basename, abspath)
+
+        else:
             # Compare checksums
             old_checksum = _file_checksum(old_abspath)
             new_checksum = _file_checksum(abspath)
@@ -98,29 +136,17 @@ def use_path(path, newname=None, override=False, ignore=False):
             warnings.warn('duplicate basename, different content:\n'
                           + '    ' + path + '\n'
                           + '    ' + old_abspath)
-            return
+
+        return
 
     # Check a .txt file to see if it's a metakernel
     if ext == '.txt' and not ignore and not _is_metakernel(abspath):
         raise ValueError('not a SPICE kernel file: ' + path)
 
     # Any other file with a valid extension is a kernel
-    _KernelInfo.ABSPATHS[basename] = abspath
     ktype = _EXTENSIONS[ext]
-    _KernelInfo.BASENAMES_FOR_KTYPE[ktype].add(basename)
-
-    # If this is an override and any attributes have been defined manually, apply these
-    # attributes to the new object
-    if basename in _KernelInfo.KERNELINFO:
-        defs = _KernelInfo.KERNELINFO[basename]._manual_defs
-        del _KernelInfo.KERNELINFO[basename]
-        info = _KernelInfo(basename)
-        for item in defs:
-            name = item[0]
-            if name in info.__dict__:
-                info.__dict__[name] = item[1]
-            else:
-                _KernelInfo.__dict__[name](info, *item[1:])
+    _KernelInfo.ABSPATHS[basename] = abspath
+    _KernelInfo.BASENAMES_BY_KTYPE[ktype].add(basename)
 
 
 def use_paths(*paths, translator=None, override=False, ignore=False):

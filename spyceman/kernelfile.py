@@ -5,8 +5,11 @@
 
 import collections
 import numbers
+import os
 import portion
 import re
+import requests
+import warnings
 
 import julian
 import spyceman._localfiles as _localfiles
@@ -78,50 +81,126 @@ class KernelFile(Kernel):
 
     _is_ordered = False     # fixed value for every instance of this subclass
 
-    def __init__(self, basename, exists=False):
-        """Construct a KernelFile object for a given basename.
+    _WARNINGS = set()       # set of warnings already issued so they are not repeated
 
-        If exists is True and the file does not exist, raise a FileNotFoundError.
+    def __init__(self, basename, exists=False, **properties):
+        """Construct a KernelFile object.
+
+        Input:
+            basename    basename of the SPICE kernel file.
+            exists      if True and the file does not exist, a FileNotFoundError is
+                        raised. Otherwise, the file need not exist.
+            name=value  optionally, set the attribute(s) or property identified by name to
+                        the specified value.
         """
 
         self._basename = basename
         if exists and basename not in _KernelInfo.ABSPATHS:
             raise FileNotFoundError('kernel file not found: ' + repr(basename))
 
+        if properties:
+            KernelFile.set_info([self], properties)
+
     @staticmethod
     def set_info(info, **properties):
-        """Initialize info about one or more known KernelFiles.
+        """Initialize info about one or more KernelFiles.
 
         Input:
-            info        a KTuple or basename, or a list thereof. If it is a KTuple, the
-                        time limits, set of NAIF IDs, and release date are assigned for
-                        this kernel file.
-            name=value  zero or more additional attributes or properties and their values
-                        to be assigned for every basename listed.
+            info        a KernelFile, KTuple or basename, or a list thereof. If it is a
+                        KTuple, the time limits, set of NAIF IDs, and release date are
+                        defined.
+            name=value  zero or more additional attributes or properties and their values.
+                        These values will be assigned to each kernel listed.
         """
 
         if not isinstance(info, list):
             info = [info]
 
-        for ktuple in info:
+        for item in info:
 
             # Create the KernelFile
-            if isinstance(ktuple, str):
-                kernel = KernelFile(ktuple)
+            if isinstance(item, KernelFile):
+                kernel = item
+            elif isinstance(item, str):
+                kernel = KernelFile(item)
             else:
-                kernel = KernelFile(ktuple.basename)
+                kernel = KernelFile(item.basename)
 
                 # Define the KTuple attributes
-                kernel.time = (ktuple.start_time, ktuple.end_time)
-                kernel.naif_ids = ktuple.naif_ids
-                kernel.release_date = ktuple.release_date
+                kernel.time = (item.start_time, item.end_time)
+                kernel.naif_ids = item.naif_ids
+                kernel.release_date = item.release_date
 
             # Set any additional properties
             for name, value in properties.items():
-                if '_' + name in kernel.__dict__:
-                    kernel.__dict__[name].fset(kernel, value)
+                if name in KernelFile.__dict__:
+                    KernelFile.__dict__[name].fset(kernel, value)
                 else:
-                    kernel.properties[name] = value
+                    info.add_property(name, value)
+
+    def must_exist(basenames, option='ignore', source='', destination=''):
+        """Utility to raise a warning or FileNotFoundError if any of a set of basenames
+        is missing.
+
+        Input:
+            basenames   SPICE kernel basename or a list or set thereof.
+            option      how to handle a missing file:
+                            "ignore"    ignore;
+                            "warn"      raise a warning;
+                            "error"     raise a FileNotFoundError;
+                            "download"  download if possible.
+            source      remote source directory of downloadable file.
+            destination local destination directory of downloaded file.
+        """
+
+        if option not in ('ignore', 'warn', 'error', 'download'):
+            raise ValueError('invalid option: ' + repr(option))
+
+        if isinstance(basenames, str):
+            basenames = [basenames]
+
+        missing = []
+        for basename in basenames:
+            kernel = KernelFile(basename)
+            if kernel.exists:
+                continue
+
+            if option == 'ignore':
+                continue
+
+            if option == 'download':
+                url = source.rstrip('/') + '/' + basename
+                warnings.warn(f'downloading "{basename}" from {source}')
+                request = requests.get(url, allow_redirects=True)
+                if request.status_code == 200:
+                    destpath = os.path.join(destination, basename)
+                    with open(destpath, 'wb') as f:
+                        f.write(request.content)
+                    _localfiles.use_path(destpath)
+                    continue
+                else:
+                    raise ConnectionError(f'response {request.status_code} received '
+                                          f'when downloading missing kernel file '
+                                          f'"{basename}" from {source}')
+
+            missing.append(basename)
+
+        if not missing:
+            return
+
+        message = ''
+        if len(missing) == 1:
+            message = f'missing kernel file: "{missing[0]}"'
+        else:
+            message = f'{len(missing)} missing kernel files including "{missing[0]}"'
+
+        if message:
+            if option == 'error':
+                raise FileNotFoundError(message)
+
+            if message not in KernelFile._WARNINGS:
+                warnings.warn(message)
+                KernelFile._WARNINGS.add(message)
 
     ######################################################################################
     # Required properties
@@ -169,7 +248,12 @@ class KernelFile(Kernel):
     @property
     def naif_ids_wo_aliases(self):
         """The set of all NAIF IDs described by the file, excluding aliases."""
-        self._info.naif_ids_without_aliases
+        return self._info.naif_ids_wo_aliases
+
+    @property
+    def naif_ids_as_found(self):
+        """The exact set of all NAIF IDs described by the file before handling aliases."""
+        return self._info.naif_ids_as_found
 
     @property
     def time(self):
@@ -234,6 +318,14 @@ class KernelFile(Kernel):
     def properties(self):
         """The dictionary of special properties for this Kernel."""
         return self._info.properties
+
+    def add_property(self, name, value):
+        """Add or modify a property, same as "self.properties[name] = value"."""
+        self._info.add_property(name, value)
+
+    def remove_property(self, name):
+        """Remove a property, same as "del self.properties[name]"."""
+        self._info.remove_property(name)
 
     ######################################################################################
     # Public properties specific to KernelFile objects
@@ -624,21 +716,36 @@ class KernelFile(Kernel):
         return [k.basename for k in kernels]
 
     @staticmethod
-    def find_all(regex=None, ktype=None, versions=False, order=[]):
+    def find_all(regex=None, family=None, version=None, ktype=None, sort='alpha',
+                 order=[], flags=re.I):
         """The list of existing basenames matching a particular pattern and/or of a
         particular type.
 
         Inputs:
-            regex       if specified, only existing basenames matching this pattern will
-                        be returned.
+            regex       if specified, only return basenames matching this pattern. Specify
+                        multiple regular expressions in a list, tuple, or set.
+            family      if specified, only return basenames in this family. Specify
+                        multiple family names in a list, tuple, or set.
+            version     if specified, only return basenames with this version. Specify
+                        multiple versions in a list or set.
             ktype       if specified, only basenames associated with this ktype will be
                         returned. If the ktype can be inferred from the regex, it is
                         not necessary to specify it here.
-            versions    True to sort basenames by version ID; False to alphabetically.
+            sort        definition of how to sort the returned basenames:
+                            "alpha"         sort alphabetically (default);
+                            "caseless"      sort alphabetically, ignoring case;
+                            "version"       sort by version;
+                            "date"          sort by release date;
+                            any function    sort using the return value of this function.
+                        Specify a hierarchy of sorts by including them in a tuple. For
+                        example, ("version", "alpha") sorts by version and then
+                        alphabetically.
             order       if this is a list of basenames, then the order of names in the
                         list returned will match the order of names in the list given,
                         with any additional names inserted following the last occurrence
                         of a matching or earlier version ID.
+            flags       the compile flags for the regular expression; default is
+                        re.IGNORECASE.
 
         Example. Suppose these files all exist:
             "jup090.bsp", "jup100-a.bsp", "jup100-b.bsp", "jup120.bsp", "jup121.bsp"
@@ -649,15 +756,11 @@ class KernelFile(Kernel):
             ["jup090.bsp", "jup120.bsp", "jup100-a.bsp", "jup100-b.bsp", "jup121.bsp"]
         """
 
-        def sort_key(basename):
+        def version_sort_key(basename):
             """Key for sorting versions. Integers and tuples of integers are sorted
             together. Strings sort as greater than integers or tuples. Missing versions
             sort last.
             """
-
-            # If we're not using version sorting, just use the basename.
-            if not versions:
-                return basename
 
             version = KernelFile(basename).version
             if isinstance(version, numbers.Integral):
@@ -670,34 +773,72 @@ class KernelFile(Kernel):
 
             return (1, version)
 
-        if not isinstance(order, (list,tuple)):
-            raise ValueError('invalid order type: ' + type(order).__name__)
+        def sort_key(basename):
+            items = []
+            for option in sort:
+                if option == 'alpha':
+                    items.append(basename)
+                elif option == 'caseless':
+                    items.append(basename.lower())
+                elif option == 'date':
+                    items.append(KernelFile(basename).release_date)
+                elif option == 'version':
+                    items.append(version_sort_key(basename))
+                elif hasattr(option, '__call__'):
+                    items.append(option(basename))
+                else:
+                    raise ValueError('invalid sort option: ' + repr(option))
 
-        # Get the extension from the regex if possible; compile the regex
-        if regex is None:
-            ext = ''
-        elif isinstance(regex, str):
-            ext = '.' + regex.rpartition('.')[-1]
-            regex = re.compile(regex)
-        else:
-            ext = '.' + regex.pattern.rpartition('.')[-1]
+        # Begin active code
 
-        # Filter by ktype and ext
-        if ktype:
-            basenames = _KernelInfo._BASENAMES_BY_KTYPE[ktype]
-        elif ext in _EXTENSIONS:
-            ktype = _EXTENSIONS[ext]
-            basenames = _KernelInfo._BASENAMES_BY_KTYPE[ktype]
-        else:
-            basenames = _KernelInfo.ABSPATHS.keys()
+        if not isinstance(sort, (tuple,list)):
+            sort = (sort,)
 
-        # Filter by regex
+        # Get the un-ordered list of basenames
         if regex:
-            basenames = [b for b in basenames if regex.fullmatch(b)]
+            basenames = set()
+            if not isinstance(regex, (list, tuple, set)):
+                regex = [regex]
+            for pattern in regex:
+                if isinstance(pattern, str):
+                    pattern = re.compile(pattern, flags=flags)
+                ext = '.' + pattern.pattern.rpartition('.')[-1].lower()
+                if ext in _EXTENSIONS:
+                    source_list = _KernelInfo._BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
+                elif ktype:
+                    source_list = _KernelInfo._BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
+                else:
+                    source_list = _KernelInfo.ABSPATHS.keys()
+                basenames |= {b for b in source_list if pattern.fullmatch(b)}
+        else:
+            if ktype:
+                basenames = _KernelInfo._BASENAMES_BY_KTYPE[ktype]
+            else:
+                basenames = set(_KernelInfo.ABSPATHS.keys())
 
-        # If there's no order input, return the list sorted alphabetically
-        if not order and not versions:
-            basenames.sort()
+        # Filter by family
+        if family:
+            if isinstance(family, (tuple, list, set)):
+                family = set(family)
+            else:
+                family = {family}
+
+            basenames = {b for b in basenames if KernelFile(b).family in family}
+
+        # Filter by version
+        if version is not None:
+            if isinstance(version, (list, set)):
+                version = set(version)
+            else:
+                version = {version}
+
+            basenames = {b for b in basenames if version & KernelFile(b).version_set}
+
+        # Sort
+        basenames.sort(key=sort_key)
+
+        # If there's no order input, return the sorted list
+        if not order:
             return basenames
 
         # Sort the found names to match the sorted list
@@ -707,13 +848,8 @@ class KernelFile(Kernel):
         if len(basenames) == len(sorted_locals):
             return sorted_locals
 
-        # Identify the extra basenames, sort
+        # Identify the extra basenames
         extras = [b for b in basenames if b not in sorted_locals]
-        extras.sort(key=sort_key)
-
-        # If no order was specified, we're done
-        if not order:
-            return extras
 
         # Merge the lists
         merged = sorted_locals
@@ -722,7 +858,7 @@ class KernelFile(Kernel):
         for extra in extras:
             key = sort_key(extra)
             vdict[extra] = key
-            where_le = [k for k,basename in enumerate(merged)
+            where_le = [k for k, basename in enumerate(merged)
                         if vdict[basename] <= key]
             if where_le:
                 merged.insert(max(where_le) + 1, extra)
@@ -731,33 +867,14 @@ class KernelFile(Kernel):
 
         return merged
 
-    ######################################################################################
-    # Public API for identifying local SPICE files
-    # Functions walk, use_path, and use_paths are defined in spyceman/_localfiles.py.
-    ######################################################################################
-
-    @staticmethod
-    def initialize():
-        """On first call, check the environment for a variable named "SPICEPATH" and walk
-        that list of directories.
-        """
-
-        if _localfiles._ROOTS:
-            return
-
-        if 'SPICEPATH' in os.environ:
-            roots = ':'.split(os.environ['SPICEPATH'])
-            for root in roots:
-                KernelFile.walk(root)
-
 ############################################################
 # Include the _localfiles functions as class methods
 ############################################################
 
-KernelFile.walk      = _localfiles.walk
-KernelFile.use_path  = _localfiles.use_path
-KernelFile.use_paths = _localfiles.use_paths
-KernelFile._INITIALIZED = False
+KernelFile.initialize = _localfiles.initialize
+KernelFile.walk       = _localfiles.walk
+KernelFile.use_path   = _localfiles.use_path
+KernelFile.use_paths  = _localfiles.use_paths
 
 ############################################################
 # Enable the Kernel class to access this subclass

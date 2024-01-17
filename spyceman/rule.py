@@ -9,6 +9,7 @@ import julian
 import re
 
 from spyceman._ktypes import _EXTENSIONS
+from spyceman._utils  import validate_version
 
 _MON_DICT = {'jan':'01', 'feb':'02', 'mar':'03', 'apr':'04', 'may':'05', 'jun':'06',
              'jul':'07', 'aug':'08', 'sep':'09', 'oct':'10', 'nov':'11', 'dec':'12'}
@@ -63,7 +64,7 @@ class Rule:
 
     _RULES[''] = rules_by_count.copy()  # if the file extension is not explicit
 
-    def __init__(self, pattern, family='', flags=0, *, datefirst=True, inclusive=True,
+    def __init__(self, pattern, family='', flags=re.I, *, datefirst=True, inclusive=True,
                        case='mixed', version=None, group=1, **properties):
         """Constructor for a Rule.
 
@@ -126,8 +127,8 @@ class Rule:
                         default behavior by providing a string containing replacement
                         patterns "\\1", "\\2", etc.
 
-            flags       any flags to use when compiling the pattern, e.g., re.I. Default
-                        is 0.
+            flags       the flags to use when compiling the pattern; default is
+                        re.IGNORECASE.
 
             datefirst   if a pattern contains three dates, use True to indicate that the
                         release date appears before the start/stop times; False if
@@ -139,8 +140,12 @@ class Rule:
             version     if provided, this value will be assigned to the version of any
                         file matching the given pattern. This can be useful if file names
                         are inconsistent, such that different versions of a file match
-                        different patterns. Alternatively, provide a function that
-                        receives the capture pattern and returns the version. For example,
+                        different patterns.
+
+                        Alternatively, the value can be a dictionary or a function. If it
+                        is a dictionary, the capture pattern is converted to lower case
+                        and used as a key into this dictionary. If it is a function, the
+                        the value returned by this function will be returned. For example,
                         to convert the captured substring to upper case, use
                         "version=str.upper".
 
@@ -164,46 +169,46 @@ class Rule:
 
         # Identify the file extension; use "" if it cannot be inferred
         self.pattern = pattern
-        ext = '.' + pattern.rpartition('.').lower()
+        ext = '.' + pattern.rpartition('.')[-1].lower()
         if ext not in Rule._RULES:
             ext = ''
 
         # Update the pattern, replacing tags with their regular expressions
         # Track the location and type of each tag among the match patterns
         parts = pattern.split('(')
-        new_parts = []
+        new_parts = [parts[0]]
 
         tagged_groups = [[],[],[]]  # (group index, tag) for dates, numbers, names
         group_index = 0
-        for k, part in enumerate(parts):
+        for part in parts[1:]:
             if part[:2] in ('?:', '?#', '?!') or part[:3] in ('?P=', '?<=', '?<!'):
                 new_parts.append(part)
                 continue
 
             group_index += 1
-            subparts = parts.partition(')')
+            subparts = part.partition(')')
             if not subparts[1]:
                 raise ValueError('nested capture patterns are not permitted: '
                                  + repr(pattern))
 
-            for i, func in enumerate(Rule._date_pattern,
-                                     Rule._version_number_pattern,
-                                     Rule._version_name_pattern):
+            for i, func in enumerate([Rule._date_pattern,
+                                      Rule._version_number_pattern,
+                                      Rule._version_name_pattern]):
 
                 pattern = func(subparts[0])
                 if pattern:
                     break
 
             if pattern:
-                new_parts += [pattern, subparts[1], subparts[2]]
+                new_parts += ['(', pattern, ')', subparts[2]]
                 tagged_groups[i].append((group_index, subparts[0]))
             else:
-                new_parts += list(subparts)
+                new_parts += ['('] + list(subparts)
 
         self.regex = re.compile(''.join(new_parts), flags=flags)
 
         # Identify the date and time groups
-        date_groups = tagged_groups[0]
+        date_groups = tagged_groups[0]      # = list of tuples (group index, matched tag)
         if len(date_groups) > 3:
             raise ValueError('more than three embedded date tags')
 
@@ -216,11 +221,9 @@ class Rule:
             (self._date_group, self._date_tag) = (0, '')
 
         if len(date_groups) >= 2:
-            tags = [t[1] for t in date_groups]
-            if tags[0] != tags[1]:
-                raise ValueError(f'mismatched time limit tags: "{tags[0]}", "{tags[1]}"')
-            self._time_groups = [t[0] for t in date_groups]
-            self._time_tag = tags[0]
+            time_groups = date_groups[-2:]
+            self._time_groups = [t[0] for t in time_groups]
+            self._time_tags = [t[1] for t in time_groups]
         else:
             self._time_groups = []
             self._time_tag = ''
@@ -228,7 +231,12 @@ class Rule:
         self._inclusive = bool(inclusive)
 
         # Identify the version
-        self._version = version
+        value_needed = (isinstance(version, (type(None), dict))
+                        or hasattr(version, '__call__'))
+        if value_needed:
+            self._version = version
+        else:
+            self._version = validate_version(version)
 
         number_groups = tagged_groups[1]
         name_groups = tagged_groups[2]
@@ -237,9 +245,13 @@ class Rule:
                              'present')
         if len(name_groups) > 1:
             raise ValueError('duplicated version name tags')
-        if (number_groups or name_groups) and not hasattr(self.version, '__call__'):
-            raise ValueError('embedded version tags are incompatible with the input '
-                             'value of "version"')
+
+        if number_groups or name_groups:
+            if not value_needed:
+                raise ValueError('embedded version tags are incompatible with the input '
+                                 'literal value of version')
+        elif value_needed:
+            raise ValueError('missing embedded version tag(s)')
 
         if name_groups:
             self._version_groups = [name_groups[0][0]]
@@ -250,7 +262,7 @@ class Rule:
             self._version_tags = [t[1] for t in number_groups]
             self._version_type = 'tuple' if len(number_groups) > 1 else 'int'
 
-        # Identify the version
+        # Identify the family
         self._family = family and re.compile(family)
 
         # Save the additional properties
@@ -261,7 +273,7 @@ class Rule:
                 self._captures.append(name)
 
         # Register in the global dictionary of rules
-        field_count = len(date_groups) + bool(self.version_groups) + bool(self.group_used)
+        field_count = len(date_groups) + bool(self._version_groups) + bool(self._captures)
         Rule._RULES[ext][field_count].append(self)
 
     def match(self, basename):
@@ -295,8 +307,8 @@ class Rule:
         # Handle time limits
         if self._time_groups:
             times = []
-            for time_group in self.time_groups:
-                iso = Rule._date_iso(match.group(time_group), self._time_tag)
+            for time_group, time_tag in zip(self._time_groups, self._time_tags):
+                iso = Rule._date_iso(match.group(time_group), time_tag)
                 times.append(julian.tdb_from_iso(iso))
 
             if self._inclusive:
@@ -305,21 +317,28 @@ class Rule:
             results['time'] = tuple(times)
 
         # Handle version ID
-        if self._version:
-            results['version'] = self.version
-        elif self._version_groups:
+        if self._version_groups:
             if self._version_type == 'str':
-                name = match.group(self._version_groups[0])
-                name = (name.upper() if self.case == 'upper' else
-                        name.lower() if self.case == 'lower' else name)
-                results['version'] = name
+                version = match.group(self._version_groups[0])
             elif self.version_type == 'int':
-                results['version'] = int(match.group(self._version_groups[0]))
+                version = int(match.group(self._version_groups[0]))
             else:
                 ints = []
                 for version_group in self._version_groups:
-                    ints.append(int(match.group(self._version_group)))
-                results['version'] = tuple(ints)
+                    ints.append(int(match.group(version_group)))
+                version = tuple(ints)
+
+            if hasattr(self._version, '__call__'):
+                version = self._version(version)
+            elif isinstance(self._version, dict):
+                if self._version_type == 'str':
+                    version = version.lower()
+                version = self._version[version]
+
+            results['version'] = version
+
+        elif self._version is not None:
+            results['version'] = version
 
         # Create the family name
         if self._family:
@@ -327,8 +346,8 @@ class Rule:
         else:
             groups_and_tags = [(self._date_group, self._date_tag)]
             if self._time_groups:
-                groups_and_tags += [(self._time_groups[0], self._time_tag),
-                                    (self._time_groups[1], self._time_tag)]
+                groups_and_tags += [(self._time_groups[0], self._time_tags[0]),
+                                    (self._time_groups[1], self._time_tags[1])]
             groups_and_tags += list(zip(self._version_groups, self._version_tags))
 
             groups_and_tags.sort(reverse=True)      # work backwards from the end!
@@ -530,9 +549,9 @@ _PARSE_OPTIONS = [
 ]
 
 # Compile the above
-for k in range(len(_SPLIT_OPTIONS)):
-    _SPLIT_OPTIONS[k] = re.compile(_SPLIT_OPTIONS[k])
-    _PARSE_OPTIONS[k] = re.compile(_PARSE_OPTIONS[k])
+for _k in range(len(_SPLIT_OPTIONS)):
+    _SPLIT_OPTIONS[_k] = re.compile(_SPLIT_OPTIONS[_k])
+    _PARSE_OPTIONS[_k] = re.compile(_PARSE_OPTIONS[_k])
 
 _YYDOY_MINIMUM  = '02001'
 

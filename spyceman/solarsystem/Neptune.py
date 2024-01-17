@@ -1,10 +1,10 @@
 ##########################################################################################
-# spyceman/planets/Neptune.py: Kernel management for the Neptune system
+# spyceman/planets/neptune.py: Kernel management for the Neptune system
 #
 # Kernel info last updated 3/19/23
 ##########################################################################################
 """\
-spyceman.planets.Neptune: Support for Neptune-specific kernels.
+spyceman.planets.neptune: Support for Neptune-specific kernels.
 
 The following attributes are defined:
 
@@ -21,7 +21,7 @@ BARYCENTER      the NAIF ID of the Neptune system barycenter.
 spk()           a Kernel object derived from one or more Neptune SPK files.
 """
 
-from kernel import KTuple, make_func
+from spyceman import CSPYCE, KTuple, spicefunc
 
 def srange(*args):
     return set(range(*args))

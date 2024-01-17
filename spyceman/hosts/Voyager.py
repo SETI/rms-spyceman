@@ -1,13 +1,19 @@
 ##########################################################################################
-# spyceman/hosts/Voyager.py
+# spyceman/hosts/voyager.py
 ##########################################################################################
 """\
-spyceman.hosts.Voyager: Support for Voyager-specific kernels.
+spyceman.hosts.voyager: Support for Voyager-specific kernels.
+
+To use:
+    from spyceman.hosts import Voyager
 
 The following attributes are defined:
 
 VG1, VG2        the body IDs of Voyager 1 and Voyager 2.
 VG1_ISSNA, ...  the frame IDs of all the Voyager instruments.
+BODY_ID         a dictionary such that BODY_ID[1] is VG1; BODY_ID[2] is VG2
+FRAME_ID        a dictionary such that FRAME_ID["VG1_ISSNA"] is VG1_ISSNA, etc. Also,
+                FRAME_ID[1, "ISSNA"] is VG1_ISSNA.
 
 The following functions are defined:
 
@@ -19,47 +25,56 @@ spk()           function returning a SP (trajectory) kernel given various constr
 metakernel()    function returning a Metakernel containing all of the above.
 """
 
-from spyceman         import CSPYCE, KernelFile, KTuple, Metakernel, Rule, spicefunc
-from spyceman.planets import Jupiter, Saturn, Uranus, Neptune
+from spyceman             import CSPYCE, KernelFile, KTuple, Metakernel, Rule, spicefunc
+from spyceman.solarsystem import Jupiter, Saturn, Uranus, Neptune
 
-################################################
-# Body and frame definitions
-################################################
+##########################################################################################
+# Public body and frame definitions
+##########################################################################################
 
 BODY_ID = {1: -31, 2: -32}
 VG1 = BODY_ID[1]
 VG2 = BODY_ID[2]
 
-VG1_SC_BUS        = -31000
-VG1_SCAN_PLATFORM = -31100
-VG1_HGA           = -31400
-VG1_ISSNA         = -31101
-VG1_ISSWA         = -31102
-VG1_PPS           = -31103
-VG1_UVS           = -31104
-VG1_UVSOCC        = -31105
-VG1_IRIS          = -31106
-VG1_IRISOCC       = -31107
+FRAME_ID = {
+    'VG1_SC_BUS'       : -31000,
+    'VG1_SCAN_PLATFORM': -31100,
+    'VG1_HGA'          : -31400,
+    'VG1_ISSNA'        : -31101,
+    'VG1_ISSWA'        : -31102,
+    'VG1_PPS'          : -31103,
+    'VG1_UVS'          : -31104,
+    'VG1_UVSOCC'       : -31105,
+    'VG1_IRIS'         : -31106,
+    'VG1_IRISOCC'      : -31107,
+    'VG2_SC_BUS'       : -32000,
+    'VG2_SCAN_PLATFORM': -32100,
+    'VG2_HGA'          : -32400,
+    'VG2_ISSNA'        : -32101,
+    'VG2_ISSWA'        : -32102,
+    'VG2_PPS'          : -32103,
+    'VG2_UVS'          : -32104,
+    'VG2_UVSOCC'       : -32105,
+    'VG2_IRIS'         : -32106,
+    'VG2_IRISOCC'      : -32107,
+}
 
-VG2_SC_BUS        = -32000
-VG2_SCAN_PLATFORM = -32100
-VG2_HGA           = -32400
-VG2_ISSNA         = -32101
-VG2_ISSWA         = -32102
-VG2_PPS           = -32103
-VG2_UVS           = -32104
-VG2_UVSOCC        = -32105
-VG2_IRIS          = -32106
-VG2_IRISOCC       = -32107
+# Alternative names
+FRAME_ID['VG1_BUS'] = VG1_SC_BUS
+FRAME_ID['VG2_BUS'] = VG1_SC_BUS
 
-VG1_BUS = VG1_SC_BUS
-VG2_BUS = VG1_SC_BUS
+# Turn these into globals
+for _key, _value in FRAME_ID.items():
+    locals()[_key] = _value
 
-FRAME_ID = {}
-for key in ('SC_BUS', 'BUS', 'SCAN_PLATFORM', 'HGA', 'ISSNA', 'ISSWA', 'PPS', 'UVS',
-            'UVSOCC', 'IRIS', 'IRISOCC'):
-    for voyager in (1,2):
-        FRAME_ID[voyager, key] = locals()[f'VG{voyager}_{key}']
+# Alternative dictionary keys FRAME_ID[1, "ISSNA"], etc.
+_keys = list(FRAME_ID.keys())
+for _key in _keys:
+    FRAME_ID[int(_key[2]), _key[4:]] = FRAME_ID[_key]
+
+##########################################################################################
+# Internal body dictionary _DEFAULT_BODY_IDS[voyager, planet] -> set of body IDs
+##########################################################################################
 
 _MODULES = {
     'jup': Jupiter,
@@ -75,25 +90,62 @@ _PLANET_NAMES = {
     'nep': 'NEPTUNE',
 }
 
-_DATE_RANGES = {
-    (1, 'jup'): ('1979-01-04T23:55:45', '-1979-04-13T23:56:44'),
-    (2, 'jup'): ('1979-04-25T00:26:27', '-1979-08-29T00:00:00'),
-    (1, 'sat'): ('1980-08-06T23:59:09', '-1981-01-01T00:00:00'),
-    (2, 'sat'): ('1981-06-01T00:00:00', '-1981-10-21T23:59:00'),
-    (2, 'ura'): ('1985-08-21T23:59:05', '-1986-02-25T13:42:00'),
-    (2, 'nep'): ('1989-04-03T16:24:35', '-1989-10-03T00:00:00'),
-}
+_DEFAULT_BODY_IDS = {}      # [voyager, planet] -> set of body IDs
+for _key, _module in _MODULES:
+    _DEFAULT_BODY_IDS[1, _PLANET_NAMES[_key]] = _module.SYSTEM | {VG1}
+    _DEFAULT_BODY_IDS[2, _PLANET_NAMES[_key]] = _module.SYSTEM | {VG2}
 
-_DATE_RANGES[None, 'jup'] = (_DATE_RANGES(1, 'jup')[0], _DATE_RANGES(2, 'jup')[1])
-_DATE_RANGES[None, 'sat'] = (_DATE_RANGES(1, 'sat')[0], _DATE_RANGES(2, 'sat')[1])
-_DATE_RANGES[None, 'ura'] =  _DATE_RANGES(2, 'ura')
-_DATE_RANGES[None, 'nep'] =  _DATE_RANGES(2, 'nep')
-_DATE_RANGES[1   , None ] = (_DATE_RANGES(1, 'jup')[0], _DATE_RANGES(1, 'sat')[1])
-_DATE_RANGES[2   , None ] = (_DATE_RANGES(2, 'jup')[0], _DATE_RANGES(2, 'nep')[1])
-_DATE_RANGES[None, None ] = (_DATE_RANGES(1, 'jup')[0], _DATE_RANGES(2, 'nep')[1])
+del _DEFAULT_BODY_IDS[1, 'URANUS']
+del _DEFAULT_BODY_IDS[1, 'NEPTUNE']
 
 ##########################################################################################
-# Define properties
+# Internal frame dictionary _DEFAULT_FRAME_IDS[voyager, component] -> set of frame IDs
+##########################################################################################
+
+# _COMPONENTS = set of component names
+_COMPONENTS = {_key[1] for _key in FRAME_ID if isinstance(_key, tuple)}
+_BUS_COMPONENT_NAMES = {'SC_BUS', 'BUS', 'HGA'}
+_SCAN_PLATFORM_COMPONENT_NAMES = _COMPONENTS - _BUS_COMPONENT_NAMES
+
+_DEFAULT_FRAME_IDS = {}
+for vgr in (1, 2):
+
+    _FRAME_IDS[vgr, 'BUS'] = _FRAME_IDS[vgr, 'HGA']
+    _FRAME_IDS[vgr, 'ISS'] = _FRAME_IDS[vgr, 'ISSNA'] | _FRAME_IDS[vgr, 'ISSWA']
+
+    for comp in _component_names:
+        if comp not in _BUS_COMPONENTS:
+            _FRAME_IDS[vgr, 'SCAN_PLATFORM'] = _FRAME_IDS[vgr, comp]
+
+
+##########################################################################################
+# Internal date dictionary _DATE_RANGES[voyager, planet] -> range of flyby dates
+##########################################################################################
+
+_TIME_RANGES = {    # (voyager, planet) -> time limits
+    (1, 'JUPITER'): ('1979-01-04T23:55:45', '-1979-04-13T23:56:44'),
+    (2, 'JUPITER'): ('1979-04-25T00:26:27', '-1979-08-29T00:00:00'),
+    (1, 'SATURN' ): ('1980-08-06T23:59:09', '-1981-01-01T00:00:00'),
+    (2, 'SATURN' ): ('1981-06-01T00:00:00', '-1981-10-21T23:59:00'),
+    (2, 'URANUS' ): ('1985-08-21T23:59:05', '-1986-02-25T13:42:00'),
+    (2, 'NEPTUNE'): ('1989-04-03T16:24:35', '-1989-10-03T00:00:00'),
+}
+
+_TIME_RANGES[None, 'JUPITER'] = (_TIME_RANGES(1, 'JUPITER')[0],
+                                 _TIME_RANGES(2, 'JUPITER')[1])
+_TIME_RANGES[None, 'SATURN']  = (_TIME_RANGES(1, 'SATURN')[0],
+                                 _TIME_RANGES(2, 'SATURN')[1])
+_TIME_RANGES[None, 'URANUS']  =  _TIME_RANGES(2, 'URANUS')
+_TIME_RANGES[None, 'NEPTUNE'] =  _TIME_RANGES(2, 'NEPTUNE')
+_TIME_RANGES[1   , None ] = (_TIME_RANGES(1, 'JUPITER')[0], _TIME_RANGES(1, 'SATURN')[1])
+_TIME_RANGES[2   , None ] = (_TIME_RANGES(2, 'JUPITER')[0], _TIME_RANGES(2, 'NEPTUNE')[1])
+_TIME_RANGES[None, None ] = (_TIME_RANGES(1, 'JUPITER')[0], _TIME_RANGES(2, 'NEPTUNE')[1])
+
+for key, value in _TIME_RANGES.items():
+    _TIME_RANGES[key] = (julian.tdb_from_iso(value[0]), julian.tdb_from_iso(value[1]))
+
+##########################################################################################
+# Define rules and properties
 ##########################################################################################
 
 # Define voyager and planet, as common properties
@@ -138,43 +190,44 @@ DOCSTRINGS['instrument'] = """\
 ##########################################################################################
 
 _CK_QMW_INFO = [
-
     KTuple('vg1_jup_qmw_na.bc',
         '1979-01-04T23:55:44.952', '1979-04-13T23:56:42.615',
         {-31001},
-        None),
+        '2012-02-14'),
     KTuple('vg1_jup_qmw_wa.bc',
         '1979-02-04T03:19:45.592', '1979-04-13T23:53:30.615',
         {-31002},
-        None),
+        '2012-02-14'),
     KTuple('vg2_jup_qmw_na.bc',
         '1979-04-25T00:26:26.963', '1979-07-16T17:06:20.576',
         {-32001},
-        None),
+        '2012-02-14'),
     KTuple('vg2_jup_qmw_wa.bc',
         '1979-05-26T00:54:24.416', '1979-07-16T17:08:44.575',
         {-32002},
-        None),
+        '2012-02-14'),
     KTuple('vg1_sat_qmw_na.bc',
         '1980-08-23T12:43:44.488', '1980-12-15T23:48:33.158',
         {-31001},
-        None),
+        '2012-02-14'),
     KTuple('vg1_sat_qmw_wa.bc',
         '1980-10-25T01:31:44.774', '1980-12-15T23:50:57.158',
         {-31002},
-        None),
+        '2012-02-14'),
     KTuple('vg2_sat_qmw_na.bc',
         '1981-06-05T16:35:17.357', '1981-09-25T18:51:06.393',
         {-32001},
-        None),
+        '2012-02-14'),
     KTuple('vg2_sat_qmw_wa.bc',
         '1981-06-05T16:37:41.357', '1981-09-25T18:53:30.393',
         {-32002},
-        None),
+        '2012-02-14'),
 ]
 
+# Call these version 0 because the SEDR CKs already have version numbers 1 and 2
 Rule(r'vgr?([12])_(jup|sat|ura|nep)_qmw_[nw]a\.bc', version=0,
-     family=r'vg\1_\2_qmw.bc', ctype=1, source='QMW', component='SCAN_PLATFORM')
+     family=r'vg\1_\2_qmw.bc', ctype=1, source='QMW',
+     component=_SCAN_PLATFORM_COMPONENT_NAMES)
 
 # Note that the QMW kernels do not use the correct frame IDs for ISSNA and ISSWA.
 CSPYCE.define_frame_aliases('VG1_ISSNA', VG1_ISSNA, -31001)
@@ -183,7 +236,6 @@ CSPYCE.define_frame_aliases('VG2_ISSNA', VG2_ISSNA, -32001)
 CSPYCE.define_frame_aliases('VG2_ISSWA', VG2_ISSWA, -32002)
 
 _CK_SEDR_INFO = [
-
     KTuple('vg1_jup_version1_type1_iss_sedr.bc',
         '1979-01-04T23:55:46.932', '1979-04-13T23:56:44.595',
         {-31100},
@@ -199,7 +251,7 @@ _CK_SEDR_INFO = [
     KTuple('vg1_sat_version2_type3_uvs_sedr.bc',
         '1980-08-22T23:10:10.456', '1980-12-16T02:08:35.138',
         {-31104},
-        "2007-06-05"),
+        '2007-01-02'),
     KTuple('vg2_sat_version1_type1_iss_sedr.bc',
         '1981-06-05T16:35:19.337', '1981-09-25T18:53:32.373',
         {-32100},
@@ -216,19 +268,14 @@ _CK_SEDR_INFO = [
 
 Rule(r'vgr?([12])_(jup|sat|ura|nep)_version(N)_type(P?<ctype>[13])_(iss|uvs)_sedr\.bc',
      family=r'vg\1_\2_versionN_typeN_\5_sedr.bc', ctype=int, source='SEDR',
-     component='SCAN_PLATFORM')
-
-scan_platform_ck = spicefunc('scan_platform_ck', title='Voyager scan platform CKs',
-                             pattern=r'vgr?[12].*(jup|sat|ura|nep).*\.bc',
-                             known=_CK_QMW_INFO + _CK_SEDR_INFO,
-                             exclusions=('voyager', 'planet'),
-                             propnames=('voyager', 'planet', 'source', 'ctype'),
-                             docstrings=DOCSTRINGS)
+     component=_SCAN_PLATFORM_COMPONENT_NAMES)
 
 _CK_BUS_INFO = [
-
-# SEDR bus family
     KTuple('vgr1_super_old.bc',
+        '1977-09-05T14:09:23.604', '2027-12-26T23:58:12.291',
+        {-31000},
+        '2000-02-24'),
+    KTuple('vgr1_super.bc',
         '1977-09-05T14:09:23.604', '2027-12-26T23:58:12.291',
         {-31000},
         '2000-02-24'),
@@ -236,10 +283,6 @@ _CK_BUS_INFO = [
         '1977-08-20T16:06:18.353', '2027-12-27T00:06:24.993',
         {-32000},
         '1999-01-31'),
-    KTuple('vgr1_super.bc',
-        '1977-09-05T14:09:23.604', '2027-12-26T23:58:12.291',
-        {-31000},
-        '2000-02-24'),
     KTuple('vgr2_super.bc',
         '1977-08-20T16:06:18.353', '2027-12-27T00:06:24.993',
         {-32000},
@@ -247,37 +290,38 @@ _CK_BUS_INFO = [
 ]
 
 Rule(r'vgr?([12])_super.*\.bc', family=r'vgr\1_super.bc', ctype=3, source='SEDR',
-     component='BUS')
+     component=_BUS_COMPONENT_NAMES)
 
 # This is an ad hoc version numbering system for the bus CKs.
-KernelFile('vgr1_super_old.bc').version=0
-KernelFile('vgr2_super_old.bc').version=0
-KernelFile('vgr1_super.bc').version=1
-KernelFile('vgr2_super.bc').version=1
+KernelFile('vgr1_super_old.bc').version=1
+KernelFile('vgr2_super_old.bc').version=1
+KernelFile('vgr1_super.bc').version=2
+KernelFile('vgr2_super.bc').version=2
 
-# This assigns version=2 to any future "vgr?_super" file where the suffix is not "old"
-Rule(r'vgr?([12])_super_(?!old).+\.bc', version=2)
-
-bus_ck = spicefunc('bus_ck', title='Voyager bus CKs',
-                   pattern=r'vgr?[12]_super.*\.bc', known=_CK_BUS_INFO,
-                   exclusions=('voyager',),
-                   propnames=('voyager', 'source', 'ctype'), docstrings=DOCSTRINGS)
+# This assigns version=3 to any future "vgr?_super" file where the suffix is not "old"
+Rule(r'vgr?([12])_super_(?!old).+\.bc', version=3)
 
 ck = spicefunc('ck', title='Voyager CKs',
-               pattern=None, known=(scan_platform_ck, ck),
+               pattern=r'vgr?[12].*\.bc',
+               known=_CK_QMW_INFO + _CK_SEDR_INFO + _CK_BUS_INFO,
                exclusions=('voyager', 'planet', 'component'),
-               propnames=('voyager', 'planet', 'source', 'ctype'), docstrings=DOCSTRINGS)
+               default_times=_TIME_LIMITS, time_key=('voyager', 'planet'),
+               default_naif_ids=_FRAME_IDS, naif_id_key=('voyager', 'commponent'),
+               propnames=('voyager', 'planet','source', 'ctype', 'component'),
+               docstrings=DOCSTRINGS)
 
 ##########################################################################################
 # Managed list of known FKs...
 ##########################################################################################
 
 _VG_FK = [
-    KTuple('vg1_v02.tf', None, None,
+    KTuple('vg1_v02.tf',
+        None, None,
         {-31400, -31300, -31200, -31107, -31106, -31105, -31104, -31103, -31102,
          -31101, -31100, -31000},
         '2000-11-27'),
-    KTuple('vg2_v02.tf', None, None,
+    KTuple('vg2_v02.tf',
+        None, None,
         {-32400, -32300, -32200, -32107, -32106, -32105, -32104, -32103, -32102,
          -32101, -32100, -32000},
         '2000-11-27'),
@@ -295,18 +339,30 @@ fk = spicefunc('fk', title='Voyager FKs',
 ##########################################################################################
 
 _VG_IK = [
-    KTuple('vg1_issna_v02.ti', None, None, {-31101}, '2000-11-27'),
-    KTuple('vg1_isswa_v01.ti', None, None, {-31102}, '2000-11-27'),
-    KTuple('vg2_issna_v02.ti', None, None, {-32101}, '2000-11-27'),
-    KTuple('vg2_isswa_v01.ti', None, None, {-32102}, '2000-11-27'),
+    KTuple('vg1_issna_v02.ti',
+        None, None,
+        {-31101},
+        '2000-11-27'),
+    KTuple('vg1_isswa_v01.ti',
+        None, None,
+        {-31102},
+        '2000-11-27'),
+    KTuple('vg2_issna_v02.ti',
+        None, None,
+        {-32101},
+        '2000-11-27'),
+    KTuple('vg2_isswa_v01.ti',
+        None, None,
+        {-32102},
+        '2000-11-27'),
 ]
 
-Rule(r'vgr?[12]_(?P<instrument>[a-z]+)_v\d\d\.ti',  instrument=str.upper)
+Rule(r'vgr?[12]_(?P<component>[a-z]+)_v\d\d\.ti',  component=str.upper)
 
 ik = spicefunc('ik', title='Voyager IK',
                pattern=r'vg[12]_([a-z]+)_v(\d\d)\.ti', known=_VG_IK,
-               exclusions=('voyager', 'instrument'),
-               propnames=('voyager', 'instrument'), docstrings=DOCSTRINGS)
+               exclusions=('voyager', 'component'),
+               propnames=('voyager', 'component'), docstrings=DOCSTRINGS)
 
 ##########################################################################################
 # Managed list of known SCLKs...
@@ -336,7 +392,7 @@ sclk = spicefunc('sclk', title='Voyager SCLK',
 # Managed list of known SPKs...
 ##########################################################################################
 
-_SPK_INFO = [
+_SPK_KTUPLES = [
 
 # Jupiter
 KTuple('vg1_jup.bsp',
@@ -445,7 +501,7 @@ KTuple('vgr2_nep081.bsp',
     {-32},
     '2009-06-24'),
 ]
-KernelFile.set_info(_SPK_INFO)
+KernelFile.set_info(_SPK_KTUPLES)
 
 # We use the version number of the associated jup/sat/ura/nep SPK as the version number of
 # each Voyager SPK.
@@ -463,16 +519,12 @@ KernelFile('vg2_ura.bsp'    ).version=33
 KernelFile('vg2_nep.bsp'    ).version=22
 
 def _voyager_spk_kernels():
-    """Create a Kernel object with a planetary system prerequisite for each Voyager SPK.
-
-    This cannot happen at import time because the KernelFile.walk() might not have been
-    called yet.
+    """A list of Voyager KernelFile objects, each with the appropriate planetary system
+    kernel(s) as prerequisites.
     """
 
-    # Initialize a dictionary basename -> kernel
-    kernels = {}
-
     # For every existing Voyager SPK...
+    kernels = []
     basenames = KernelFile.find_all(r'vgr?[12]_(jup|sat|ura|nep).*\.bsp')
     for basename in basenames:
 
@@ -491,16 +543,34 @@ def _voyager_spk_kernels():
                             version=kfile.version, expand=True)
         kfile.require(prereq)
 
-        # Exclude any other SPK for this spacecraft and planet
-        kfile.exclude(f'vgr?{voyager}_{planet_key}.*\\.bsp')
-
-        kernels[basename] = kfile
+        kernels.append(kfile)
 
     return kernels
 
-spk = spicefunc('spk', title='Voyager SPKs', pattern=r'vgr?[12].(jup|sat|ura|nep).*\.bsp',
+def _default_naif_ids(voyager, planet):
+
+    ids = set()
+
+    if voyager is None:
+        ids |= set(BODY_ID.values())
+    else:
+        ids.add(BODY_ID[voyager])
+
+    if planet is None:
+        ids |= Jupiter.ALL_IDS | Saturn.ALL_IDS
+        if voyager != 1:
+            ids |= Uranus.ALL_IDS | Neptune.ALL_IDS
+    else:
+        ids |= _MODULES[planet[:3].lower()].ALL_IDS
+
+    return ids
+
+spk = spicefunc('spk', title='Voyager SPKs',
+                pattern=r'vgr?[12]_(jup|sat|ura|nep).*\.bsp',
                 known=_voyager_spk_kernels,
                 exclusions=('voyager', 'planet'),
+                default_times=_TIME_LIMITS, time_key=('voyager', 'planet'),
+                default_naif_ids=_BODY_IDS, naif_id_key=('voyager', 'planet'),
                 propnames=('voyager', 'planet'), docstrings=DOCSTRINGS)
 
 ##########################################################################################
