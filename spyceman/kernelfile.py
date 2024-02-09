@@ -5,11 +5,8 @@
 
 import collections
 import numbers
-import os
 import portion
 import re
-import requests
-import warnings
 
 import julian
 import spyceman._localfiles as _localfiles
@@ -17,6 +14,10 @@ import spyceman._localfiles as _localfiles
 from spyceman.kernel      import Kernel
 from spyceman._kernelinfo import _KernelInfo
 from spyceman._ktypes     import _EXTENSIONS
+from spyceman._downloads  import get_fancy_index_dates, retrieve_online_file
+from spyceman._utils      import is_basename, validate_time, validate_naif_ids, \
+                                 validate_release_date, _input_set, _input_list, \
+                                 _test_version
 
 KTuple = collections.namedtuple('KTuple', ['basename', 'start_time', 'end_time',
                                            'naif_ids', 'release_date'])
@@ -40,19 +41,28 @@ class KernelFile(Kernel):
                         this kernel is relevant to all times, this tuple is (None, None).
         k.release_date  the release date of this kernel in "yyyy-mm-dd" format.
         k.version       the version number, string, or tuple of integers. If this kernel
-                        does not have a version number, the value is "".
-        k.family        the family of kernels with which this file associated. For
-                        example, if a kernel has multiple versions indicated by a
-                        three-digit integer, this would be the basename with its version
-                        replaced by "NNN".
+                        does not have a version number, the value is "". A file may be
+                        associated with multiple versions, in which case this attribute is
+                        a set.
+        k.version_as_set the version(s) as a set. If the kernel has only one version, this
+                        set will have a single element. If the version is an empty string,
+                        the set is empty.
+        k.source        a list of one or more URLs pointing to online directories that can
+                        be searched to download this file.
+        k.dest          a sub-path defining where to place this file within the user's
+                        SPICE downloads directory.
+        k.family        the family of kernels with which this file associated.
         k.properties    a dictionary of any special properties for this kernel. Special
                         properties are mission-specific. For example, one might define the
                         property "voyager" for Voyager kernels, where the value is 1 for
                         kernels specific to Voyager 1 and 2 for kernels specific to
                         Voyager 2.
+
         k.exists        True if this file exists in the local file system.
         k.abspath       the absolute path to this file if it exists. Otherwise, an empty
                         string.
+        k.is_known      True if this file is known to exist, although perhaps only online.
+
         k.ext           the file extension (including the period).
         k.is_text       True if this is a text kernel.
         k.is_binary     True if this is a binary kernel.
@@ -71,35 +81,96 @@ class KernelFile(Kernel):
     if two different KernelFile objects refer to the same basename, they will have access
     to the same information.
 
-    In most cases, this information is derived directly from a file or its name. Users can
-    override many of these properties by setting their values explicitly.
+    In many cases, some of this information is derived directly from a file or its name
+    using "Rules". Users can override these properties by setting their values explicitly.
 
     All SPICE kernel basenames must be unique. Initial calls to KernelFile.walk(),
-    KernelFile.use_path(), and/or KernelFile.use_paths() will associate a basename with
-    its path in the user's local file system.
+    KernelFile.use_path(), and/or KernelFile.use_paths() will associate basenames with
+    their paths in the user's local file system.
+
+    Note that a KernelFile can be constructed for a file basename that does not currently
+    exist. If the file is needed, it will be downloaded from one of its defined source
+    URLs and saved to the directory defined by its dest attribute.
     """
 
     _is_ordered = False     # fixed value for every instance of this subclass
-
-    _WARNINGS = set()       # set of warnings already issued so they are not repeated
 
     def __init__(self, basename, exists=False, **properties):
         """Construct a KernelFile object.
 
         Input:
-            basename    basename of the SPICE kernel file.
-            exists      if True and the file does not exist, a FileNotFoundError is
-                        raised. Otherwise, the file need not exist.
+            basename    basename of a SPICE kernel file, or else a KernelFile object.
+            exists      if True, this file is required to exist locally.
             name=value  optionally, set the attribute(s) or property identified by name to
                         the specified value.
         """
 
+        if isinstance(basename, KernelFile):
+            basename = basename._basename
+
         self._basename = basename
-        if exists and basename not in _KernelInfo.ABSPATHS:
-            raise FileNotFoundError('kernel file not found: ' + repr(basename))
 
         if properties:
             KernelFile.set_info([self], properties)
+
+        if exists:
+            if basename not in _KernelInfo.ABSPATHS:
+                self.must_exist()
+            else:
+                raise FileNotFoundError('kernel file not found: ' + repr(basename))
+
+    def must_exist(self, source='', dest='', verbose=True):
+        """Ensure that this file exists locally.
+
+        Input:
+            source      optional override to the default source URL(s).
+            dest        optional override to the default local destination.
+            verbose     True to print information about downloads.
+        """
+
+        if self.exists:
+            return
+
+        if Kernel._DOWNLOADS:
+
+            dest = dest or self.dest
+
+            sources = source or self.source
+            if isinstance(sources, str):
+                sources = [sources]
+
+            # Try each of the possible sources
+            error = None
+            found = False
+            for source in sources:
+                table = get_fancy_index_dates(source)
+                if table and self.basename not in table:
+                    continue
+                if verbose:
+                    if table:
+                        print(f'downloading "{self.basename}" from {source}')
+                    else:
+                        print(f'attempting to download "{self.basename}" from {source}')
+
+                try:
+                    destpath = retrieve_online_file(source, dest, self.basename,
+                                                    dates=table, label=True)
+                    found = True
+                    break
+
+                except ConnectionError as e:
+                    error = error or e
+
+            if not found:
+                if error:
+                    raise error
+                raise FileNotFoundError('no identified source for "{self.basename}"')
+
+            # Use this new file
+            _localfiles.use_path(destpath)
+
+        else:
+            raise FileNotFoundError(f'missing kernel file: "{self.basename}"')
 
     @staticmethod
     def set_info(info, **properties):
@@ -108,7 +179,7 @@ class KernelFile(Kernel):
         Input:
             info        a KernelFile, KTuple or basename, or a list thereof. If it is a
                         KTuple, the time limits, set of NAIF IDs, and release date are
-                        defined.
+                        also defined.
             name=value  zero or more additional attributes or properties and their values.
                         These values will be assigned to each kernel listed.
         """
@@ -137,70 +208,6 @@ class KernelFile(Kernel):
                     KernelFile.__dict__[name].fset(kernel, value)
                 else:
                     info.add_property(name, value)
-
-    def must_exist(basenames, option='ignore', source='', destination=''):
-        """Utility to raise a warning or FileNotFoundError if any of a set of basenames
-        is missing.
-
-        Input:
-            basenames   SPICE kernel basename or a list or set thereof.
-            option      how to handle a missing file:
-                            "ignore"    ignore;
-                            "warn"      raise a warning;
-                            "error"     raise a FileNotFoundError;
-                            "download"  download if possible.
-            source      remote source directory of downloadable file.
-            destination local destination directory of downloaded file.
-        """
-
-        if option not in ('ignore', 'warn', 'error', 'download'):
-            raise ValueError('invalid option: ' + repr(option))
-
-        if isinstance(basenames, str):
-            basenames = [basenames]
-
-        missing = []
-        for basename in basenames:
-            kernel = KernelFile(basename)
-            if kernel.exists:
-                continue
-
-            if option == 'ignore':
-                continue
-
-            if option == 'download':
-                url = source.rstrip('/') + '/' + basename
-                warnings.warn(f'downloading "{basename}" from {source}')
-                request = requests.get(url, allow_redirects=True)
-                if request.status_code == 200:
-                    destpath = os.path.join(destination, basename)
-                    with open(destpath, 'wb') as f:
-                        f.write(request.content)
-                    _localfiles.use_path(destpath)
-                    continue
-                else:
-                    raise ConnectionError(f'response {request.status_code} received '
-                                          f'when downloading missing kernel file '
-                                          f'"{basename}" from {source}')
-
-            missing.append(basename)
-
-        if not missing:
-            return
-
-        message = ''
-        if len(missing) == 1:
-            message = f'missing kernel file: "{missing[0]}"'
-        else:
-            message = f'{len(missing)} missing kernel files including "{missing[0]}"'
-
-        if message:
-            if option == 'error':
-                raise FileNotFoundError(message)
-
-            if message not in KernelFile._WARNINGS:
-                warnings.warn(message)
-                KernelFile._WARNINGS.add(message)
 
     ######################################################################################
     # Required properties
@@ -296,8 +303,16 @@ class KernelFile(Kernel):
 
     @property
     def version(self):
-        """Version of this kernel file as a string, integer, or tuple of integers."""
+        """Version of this kernel file as a string, integer, or tuple of integers, or
+        a set containing multiple versions. If the file has no version, the value is "".
+        """
         return self._info.version
+
+    @property
+    def version_as_set(self):
+        """Version(s) of this kernel file as a set containing strings, integers, or tuples
+        of integers."""
+        return self._info.version_as_set
 
     @version.setter
     def version(self, value):
@@ -313,6 +328,26 @@ class KernelFile(Kernel):
     @family.setter
     def family(self, value):
         self._info.family = str(value)
+
+    @property
+    def source(self):
+        """One or more URLs to search for this file online."""
+        return self._info.source
+
+    @source.setter
+    def source(self, value):
+        self._info.source = value
+
+    @property
+    def dest(self):
+        """The sub-path within a SPICE kernel download directory where this file will be
+        located upon download.
+        """
+        return self._info.dest
+
+    @dest.setter
+    def dest(self, value):
+        self._info.dest = value
 
     @property
     def properties(self):
@@ -341,6 +376,13 @@ class KernelFile(Kernel):
     def exists(self):
         """True if this kernel file exists."""
         return self._info.exists
+
+    @property
+    def is_known(self):
+        """True if this kernel file basename has been defined; it might not exist as a
+        local file.
+        """
+        return self._info.is_known
 
     @property
     def ext(self):
@@ -411,474 +453,516 @@ class KernelFile(Kernel):
         return self._info.meta_basenames
 
     ######################################################################################
-    # Public API for selecting kernel files
+    # Public API for selecting and sorting kernel files
     ######################################################################################
 
     @staticmethod
-    def filter_basenames(basenames, name=None, tmin=None, tmax=None, ids=None,
-                         dates=None, versions=None, expand=False, reduce=False,
-                         **properties):
-        """Filter a list or set of basenames based on time coverage, NAIF IDs, version,
-        release date, and/or property values
+    def reduce(basenames, *, tmin=None, tmax=None, ids=None):
+        """Reduce a list of basenames or KernelFiles to the minimal list that provides
+        complete coverage.
+
+        Input:
+            basenames   an ordered list of basenames or KernelFiles.
+            tmin, tmax  time range coverage desired.
+            ids         set of NAIF IDs required.
+
+        Return:         the reduced list of basenames or KernelFiles.
+        """
+
+        return_basenames = isinstance(basenames[0], str)
+        kfiles = [KernelFile(b) if isinstance(b, str) else b for b in basenames]
+
+        BIGTIME = 1.e99
+
+        if tmin is None:
+            tmins = [k.time[0] for k in kfiles if k.time[0] is not None]
+            if tmins:
+                tmin = min(tmins)
+            else:
+                tmin = -BIGTIME
+
+        if tmax is None:
+            tmaxes = [k.time[1] for k in kfiles if k.time[1] is not None]
+            if tmaxes:
+                tmax = max(tmaxes)
+            else:
+                tmin = BIGTIME
+
+        if not ids:
+            ids = set()
+            for k in kfiles:
+                ids |= k.naif_ids_wo_aliases
+
+        if not ids:
+            if tmin == -BIGTIME and tmax == BIGTIME:
+                return kfiles[-1:]
+            ids = {0}
+
+        interval_dicts = {i:portion.IntervalDict() for i in ids}
+        for kfile in kfiles:
+            naif_ids = {0} if ids == {0} else kfile.naif_ids & ids
+            for naif_id in naif_ids:
+                # Each KernelFile interval overwrites the intervals of names earlier in
+                # in the list
+                (t0, t1) = kfile.time
+                if t0 is None:
+                    t0 = -BIGTIME
+                if t1 is None:
+                    t1 = -BIGTIME
+
+                interval = portion.closed(t0, t1)
+                interval_dicts[naif_id][interval] = kfile
+
+        # Identify the full set of kernels needed to cover each NAIF ID
+        times_required = portion.closed(tmin, tmax)
+
+        reduced_set = set()
+        for interval_dict in interval_dicts.values():
+            coverage = interval_dict[times_required]
+            reduced_set |= set(coverage.values())
+
+        # Return the required kernels in their original order
+        kfiles = [k for k in kfiles if k in reduced_set]
+
+        if return_basenames:
+            return [k.basename for k in kfiles]
+
+        return kfiles
+
+    @staticmethod
+    def filter_basenames(basenames, tmin=None, tmax=None, ids=None, *, name=None,
+                         version=None, release_date=None, expand=False, reduce=False,
+                         flags=re.IGNORECASE, **properties):
+        """Filter a list of basenames or KernelFiles based on time coverage, NAIF IDs,
+        version, release date, and/or property values
 
         If the input is a list, the filtered list returned will be in the same order.
 
         Inputs:
-            basenames   a list or set of basenames for which the filter is to be applied.
-            name        a basename or regular expression that every returned file basename
-                        must match. Alternatively, a tuple of patterns or basenames, and
-                        every returned file must match one or more of these patterns.
+            basenames   a list of basenames or KernelFiles for which the filter is to be
+                        applied.
+            tmin, tmax  only include kernel files with times that overlap this time
+                        interval, specified as a date/time string or in TDB seconds.
+            ids         only include kernel files that refer to one or more of these NAIF
+                        IDs.
+            name        only include kernel files that match this basename or regular
+                        expression. Specify multiple values in a list, set, or tuple.
                         Note: in this context, a string containing only only letters,
                         numbers, underscore, dash ("-") and dot(".") is treated as a
                         literal basename rather than as a match pattern.
-            tmin, tmax  only include basenames with times that overlap this time interval,
-                        specified in TDB seconds.
-            ids         only include basenames that refer to one or more of these NAIF
-                        IDs.
-            dates       only include basenames released within this range of dates. Use a
-                        tuple of two date strings, defining the earliest and latest dates
-                        to include. Replace either date value with None or an empty string
-                        to ignore that constraint. A single date is treated as the latest
-                        release date.
-            versions    only include basenames within this range of versions. Use a tuple
-                        of two version IDs, defining the minimum and maximum to be
-                        included. Replace either value with None to ignore that
-                        constraint. A single string or integer is treated as the upper
-                        limit.
-            expand      if True, the returned list of basenames is expanded if necessary
-                        to ensure that all of the specified NAIF IDs are covered for the
-                        entire time range tmin to tmax. In this case, some constraints on
-                        the name, release date, and version might be violated.
-            reduce      If True, only a reduced subset of the basenames will be returned.
-                        The reduced subset excludes any kernel files earlier in the list
-                        whose content is completely covered by later kernels. If False,
-                        every kernel file containing times and IDs related to the request
-                        will be returned.
-            name=value  optional additional property constraints. If a single non-None
-                        value is given, basenames that have a different value of this
-                        property will be excluded, but those for which the named property
-                        is undefined will still be included. To match multiple values of
-                        a property, specify these values inside a tuple, list, or set.
+            version     only include kernel files that match this version. Use a set to
+                        specify multiple acceptable versions. Use a list of two values to
+                        specify the minimum and a maximum (inclusive) of acceptable range;
+                        in this case, either value can be None to enforce a minimum or a
+                        maximum version but not both.
+            release_date only include kernel files consistent with this release date. Use
+                        a list or tuple of two date strings defining the earliest and
+                        latest dates to include. Replace either date value with None or an
+                        empty string to ignore that constraint. A single date is treated
+                        as the upper limit on the release date.
+            expand      if True, the returned list of kernel files is expanded if
+                        necessary to ensure that the entire time range is covered for all
+                        of the specified NAIF IDs. In this case, some constraints on name,
+                        version, and release date might be violated.
+            reduce      If True, any kernel files whose coverage is eclipsed by other
+                        kernel files later in the list will be eliminated.
+            flags       compile flags to use on any regular expressions. Default is
+                        re.IGNORECASE.
+            name=value  any additional constraints on property values; kernel files with
+                        other values will be removed from the returned list. Place
+                        multiple values in a list, set, or tuple.
         """
 
-        original_basenames = basenames
+        def filter_by_name(name, kfiles):
+            if not name:
+                return kfiles
 
-        # Apply the basename filter
-        if name is not None:
-            if not isinstance(name, (list, tuple)):
-                patterns = (name,)
+            name = _input_set(name)
+            names = {n.lower() for n in name if is_basename(n)}
+            patterns = [re.compile(n, flags=flags) for n in name if not is_basename(n)]
+            sublist = []
+            for kfile in kfiles:
+                if kfile.basename.lower() in names:
+                    sublist.append(kfile)
+                else:
+                    for pattern in patterns:
+                        if pattern.fullmatch(kfile.basename):
+                            sublist.append(kfile)
+                            break
+
+            return sublist
+
+        def filter_by_version(version, kfiles):
+            if not version:
+                return kfiles
+
+            return [k for k in kfiles if _test_version(version, k)]
+
+        def filter_by_release_date(release_date, kfiles):
+            if not release_date:
+                return kfiles
+
+            sublist = []
+            for kfile in kfiles:
+                date = kfile.release_date
+                if date:
+                    if release_date[0] and date < release_date[0]:
+                        continue
+                    if release_date[1] and date > release_date[1]:
+                        continue
+                    sublist.append(kfile)
+                else:
+                    sublist.append(kfile)
+
+            return sublist
+
+        def filter_by_properties(properties, kfiles):
+            if not properties:
+                return kfiles
+
+            for name, value in properties.items():
+                if not value and value != 0:    # ignore None or empties but not zero
+                    continue
+
+                sublist = []
+                valset = _input_set(value)
+                for kfile in kfiles:
+                    if name in kfile.properties:
+                        test = _input_set(kfile.properties[name])
+                        if test & valset:
+                            sublist.append(kfile)
+                    else:
+                        sublist.append(kfile)
+
+                kfiles = sublist
+
+            return kfiles
+
+        #### Begin active code here
+
+        # Clean up inputs
+        name = _input_list(name)
+
+        if release_date:
+            if isinstance(release_date, (list, tuple)):
+                release_date = [validate_release_date(release_date[0]),
+                                validate_release_date(release_date[1])]
             else:
-                patterns = name
+                release_date = [None, validate_release_date(release_date)]
 
-            # Create the set of every basename matching one or more patterns
-            matches = set()
-            for pattern in patterns:
+        if tmin is not None:
+            tmin = validate_time(tmin)
 
-                regex = None
-                if isinstance(pattern, re.Pattern):
-                    regex = pattern
-                else:
-                    # With no special chars, it's a literal string; otherwise, a regex
-                    if not KernelFile._is_basename(pattern):
-                        regex = re.compile(pattern, re.I)
-
-                if regex:
-                    for basename in basenames:
-                        if regex.fullmatch(basename):
-                            matches.add(basename)
-                else:
-                    matches.add(pattern)
-
-            # Filter the list of basenames, preserving original order
-            basenames = [b for b in basenames if b in matches]
-
-        # Filter on properties
-        if properties:
-            kernels = [KernelFile(b) for b in basenames]
-            filtered = set()
-
-            # For each property constrained by the user...
-            for prop_name, prop_values in properties.items():
-                name_found = False
-
-                # Convert the value(s) to a set; include None
-                if isinstance(prop_values, (list,tuple,set)):
-                    prop_values = set(prop_values) | {None}
-                else:
-                    prop_values = {prop_values, None}
-
-                # Filter KernelFiles based on the constraint. Include KernelFiles for
-                # which the property is not present or None.
-                for kernel in kernels:
-                    if prop_name in kernel.properties:
-                        name_found = True
-
-                    kernel_value = kernel.properties.get(prop_name, None)
-                    if kernel_value in prop_values:
-                        filtered.add(kernel.basename)
-
-                # If this property did not appear anywhere, it was probably an error
-                if not name_found:
-                    raise ValueError('filter_basenames() got an unexpected keyword '
-                                     'argument ' + repr(prop_name))
-
-            # Create the filtered basename list, preserving the original order
-            basenames = [k.basename for k in kernels if k.basename in filtered]
-
-        basenames_filtered_by_name = basenames  # save this list for the "expand" option
-
-        # Create KernelFile objects
-        kernels = [KernelFile(b) for b in basenames]
-
-        # Filter by time interval
-        if (tmin, tmax) != (None, None):
-            # If either time is None, use the other
-            tmin = tmax if tmin is None else tmin
-            tmax = tmin if tmax is None else tmax
-            time_is_constrained = tmin is not None
-
-            kernels = [k for k in kernels if Kernel.time_overlap(tmin, tmax)]
-
-        # Filter by NAIF ID
-        if isinstance(ids, numbers.Integral):
-            ids = {ids}
+        if tmax is not None:
+            tmax = validate_time(tmax)
 
         if ids:
-            kernels = [k for k in kernels if Kernel.naif_id_overlap(tmin, tmax, ids)]
+            ids = validate_naif_ids(ids)
 
-        # Filter by date
-        if not isinstance(dates, (tuple, list)):
-            dates = (None, dates)
+        # Check return type
+        return_basenames = isinstance(basenames[0], str)
 
-        if dates[0] is not None:
-            if isinstance(dates[0], numbers.Integral):
-                date = julian.ymd_format_from_day(dates[0])
-            else:
-                date = dates[0]
+        # Switch from basenames to KernelFiles
+        kfiles = [KernelFile(b) if isinstance(b, str) else b for b in basenames]
 
-            kernels = [k for k in kernels if (k.release_date and k.release_date >= date)]
+        # Sub-select kernels by time and/or NAIF IDs
+        if tmin is not None or tmax is not None or ids:
+            kfiles = [k for k in kfiles if k.has_overlap(tmin, tmax, ids)]
 
-        if dates[1] is not None:
-            if isinstance(dates[1], numbers.Integral):
-                date = julian.ymd_format_from_day(dates[1])
-            else:
-                date = dates[1]
+        # Always filter based on properties
+        kfiles = filter_by_properties(properties, kfiles)
 
-            kernels = [k for k in kernels if (k.release_date and k.release_date <= date)]
+        unfiltered = kfiles
 
-        # Filter by version
-        if not isinstance(versions, (tuple, list)):
-            versions = (None, versions)
+        # Filter based on other inputs
+        kfiles = filter_by_name(name, kfiles)
+        kfiles = filter_by_version(version, kfiles)
+        kfiles = filter_by_release_date(release_date, kfiles)
 
-        if versions[0] is not None:
-            kernels = [k for k in kernels if Kernel._version_ge(k.version, versions[0])]
+        # Expand if necessary
+        if expand:
+            # To expand, we first try earlier files and then later files, relative to what
+            # is in the filtered list.
 
-        if versions[1] is not None:
-            kernels = [k for k in kernels if Kernel._version_le(k.version, versions[1])]
+            # Find the highest location of a filtered file in the unfiltered list
+            maxloc = unfiltered.index(kfiles[-1])
 
-        # For the expand and/or reduce options, revisit the set of NAIF IDs and time range
-        if expand or reduce:
+            # Create the ordered list of unused files
+            kset = set(kfiles)
+            before = [k for k in unfiltered[:maxloc] if k not in kset]
+            after  = [k for k in unfiltered[maxloc:] if k not in kset]
+            expanded = after[::-1] + before + kfiles
 
-            # If no NAIF ID constraint was provided, use the set of NAIF IDs found
-            ids_found = Kernel.naif_ids_for_kernels(*kernels)
-            if not ids:
-                ids = ids_found
+            reduced = set(KernelFile.reduce(expanded, tmin=tmin, tmax=tmax, ids=ids))
+            kfiles = [k for k in expanded if k in (reduced | kset)]
 
-            # Also remove any NAIF IDs that are completely absent
-            if ids:
-                all_ids = Kernel.naif_ids_for_kernels(*original_basenames)
-                if all_ids:
-                    ids = ids & all_ids
-
-        # Expand the list of basenames if necessary
-        if expand and (name or dates != (None, None) or versions != (None, None)):
-            new_basenames = set()
-
-            # We will try four different ways to address any missing NAIF IDs or cases of
-            # incomplete coverage:
-            #   1. Allow earlier dates and versions but retain the name constraint;
-            #   2. Allow any dates or versions but retain the name constraint;
-            #   3. Relax the name constraint, and then allow earlier dates and versions;
-            #   4. Relax all name, date, and version constraints.
-
-            if basenames_filtered_by_name == original_basenames:
-                list_options = [original_basenames]
-            else:
-                list_options = [basenames_filtered_by_name, original_basenames]
-
-            iters = len(list_options)
-            if dates[1] is None and versions[1] is None:
-                date_options    = iters * [(None, None)]
-                version_options = iters * [(None, None)]
-            else:
-                date_options    = iters * [(None, dates[1])   , (None, None)]
-                version_options = iters * [(None, versions[1]), (None, None)]
-                list_options    = [2*[option] for option in list_options]
-
-            # Determine which NAIF IDs require additional kernel files
-            time_info = {}      # naif_id -> (best times, current times, expansion needed)
-            for naif_id in ids:
-
-                # Figure out the best possible time coverage for this NAIF ID
-                best = Kernel.time_for_kernels(*original_basenames, ids={naif_id})
-
-                # Get the current time limits (None if the NAIF ID is missing)
-                current = Kernel.time_for_kernels(*kernels, ids={naif_id})
-
-                if time_is_constrained:
-                    best = (max(tmin, best[0]), min(tmax, best[1]))
-                    if best[0] > best[1]:
-                        # Skip this NAIF ID because the time coverage required does not
-                        # overlap anything in the original set of available kernels.
-                        ids.remove(naif_id)
-                        continue
-
-                    expansion = (current[0] is None or current[0] > best[0],
-                                 current[1] is None or current[1] < best[1])
-                else:
-                    expansion = (current[0] is None, current[1] is None)
-
-                time_info = (best, current, expansion)
-
-            # Try the four expansion options
-            for (list_option, date_option, version_option) in zip(list_options,
-                                                                  date_options,
-                                                                  version_options):
-                new_basenames = set()
-
-                # Check each NAIF ID
-                try_again = False       # becomes True if any NAIF ID is incomplete
-                for naif_id in ids:
-                    (best, current, expansion) = time_info[naif_id]
-                    if expansion == (False, False):
-                        continue
-
-                    # Get the list of relevant basenames
-                    basenames_for_id = KernelFile.filter_basenames(
-                                                        list_option,
-                                                        tmin=tmin, tmax=tmax,
-                                                        dates=date_option,
-                                                        versions=version_option,
-                                                        ids={naif_id}, expand=False)
-
-                    # Check the time limits of coverage now
-                    (t0, t1) = Kernel.time_for_kernels(*basenames_for_id,
-                                                       ids={naif_id})
-                    if expansion[0]:
-                        t0_satisfied = t0 is not None and (t0 <= best[0])
-                    else:
-                        t0_satisfied = True     # because expansion is not needed
-
-                    if expansion[1]:
-                        t1_satisfied = t1 is not None and (t1 >= best[1])
-                    else:
-                        t1_satisfied = True     # because expansion is not needed
-
-                    new_basenames |= set(basenames_for_id)
-
-                    # If time limits are unsatisfied, move on to next set of options
-                    if not (t0_satisfied and t1_satisfied):
-                        try_again = True
-                        break                   # exit the loop over NAIF IDs
-
-                if not try_again:
-                    break
-
-            # Sort with expanded basenames before un-expanded basenames
-            old_basenames = {k.basename for k in kernels}
-            new_kernels = [KernelFile(b) for b in original_basenames
-                           if b in new_basenames and b not in old_basenames]
-            kernels = new_kernels + kernels
-
-        # If necessary, reduce the list by eliminating extraneous kernels
+        # Reduce if necessary
         if reduce:
-            interval_dicts = {i:portion.IntervalDict() for i in ids}
-            for kernel in kernels:
-                for naif_id in (kernel.naif_ids & ids):
-                    # Each basename's interval overwrites the intervals of names earlier
-                    # in the list
-                    interval = portion.closed(*kernel.time)
-                    interval_dicts[naif_id][interval] = kernel
+            kfiles = KernelFile.reduce(kfiles, tmin=tmin, tmax=tmax, ids=ids)
 
-            # Identify the full set of kernels needed to cover each NAIF ID
-            if not time_is_constrained:
-                (tmin, tmax) = Kernel.ALL_TIME
-            times_required = portion.closed(tmin, tmax)
+        if return_basenames:
+            return [k.basename for k in kfiles]
 
-            reduced_set = set()
-            for interval_dict in interval_dicts.values():
-                coverage = interval_dict[times_required]
-                reduced_set |= set(coverage.values())
-
-            # Reorder the selected kernels
-            kernels = [k for k in kernels if k in reduced_set]
-
-        return [k.basename for k in kernels]
+        return kfiles
 
     @staticmethod
-    def find_all(regex=None, family=None, version=None, ktype=None, sort='alpha',
-                 order=[], flags=re.I):
-        """The list of existing basenames matching a particular pattern and/or of a
-        particular type.
+    def find_all(pattern=None, *, ktype=None, exists=False, sort='alpha', flags=re.I):
+        """The list of basenames matching a particular pattern and/or of a particular
+        type.
 
         Inputs:
-            regex       if specified, only return basenames matching this pattern. Specify
-                        multiple regular expressions in a list, tuple, or set.
-            family      if specified, only return basenames in this family. Specify
-                        multiple family names in a list, tuple, or set.
-            version     if specified, only return basenames with this version. Specify
-                        multiple versions in a list or set.
+            pattern     if specified, only return basenames matching this name or pattern.
+                        Specify multiple names or regular expressions in a list, tuple, or
+                        set.
             ktype       if specified, only basenames associated with this ktype will be
-                        returned. If the ktype can be inferred from the regex, it is
+                        returned. If the ktype can be inferred from the pattern, it is
                         not necessary to specify it here.
+            exists      if True, only file basenames in the local file system are
+                        returned.
             sort        definition of how to sort the returned basenames:
                             "alpha"         sort alphabetically (default);
-                            "caseless"      sort alphabetically, ignoring case;
                             "version"       sort by version;
                             "date"          sort by release date;
                             any function    sort using the return value of this function.
-                        Specify a hierarchy of sorts by including them in a tuple. For
-                        example, ("version", "alpha") sorts by version and then
-                        alphabetically.
-            order       if this is a list of basenames, then the order of names in the
-                        list returned will match the order of names in the list given,
-                        with any additional names inserted following the last occurrence
-                        of a matching or earlier version ID.
             flags       the compile flags for the regular expression; default is
                         re.IGNORECASE.
+        """
 
-        Example. Suppose these files all exist:
-            "jup090.bsp", "jup100-a.bsp", "jup100-b.bsp", "jup120.bsp", "jup121.bsp"
-        and these are the inputs:
-            regex = r"jup(\\d\\d\\d).*\\.bsp"
-            order = ["jup120.bsp", "jup100-a.bsp",  "jup100-c.bsp"]
-        The returned list will be:
-            ["jup090.bsp", "jup120.bsp", "jup100-a.bsp", "jup100-b.bsp", "jup121.bsp"]
+        sort_key = KernelFile.basename_sort_key(sort)
+
+        # Get the set of candidate basenames
+        if pattern:
+            basenames = set()
+            if isinstance(pattern, (list, tuple, set)):
+                patterns = pattern
+            else:
+                patterns = [pattern]
+
+            for pattern in patterns:
+                if isinstance(pattern, str):
+                    if is_basename(pattern):
+                        pattern = pattern.replace('.', r'\.')
+                    pattern = re.compile(pattern, flags=flags)
+
+                ext = '.' + pattern.pattern.rpartition('.')[-1].lower()
+                if ext in _EXTENSIONS:
+                    sources = _KernelInfo.BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
+                elif ktype:
+                    sources = _KernelInfo.BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
+                else:
+                    sources = _KernelInfo.KERNELINFO.keys()
+                basenames |= {b for b in sources if pattern.fullmatch(b)}
+
+        else:
+            if ktype:
+                basenames = _KernelInfo.BASENAMES_BY_KTYPE[ktype]
+            else:
+                basenames = set(_KernelInfo.KERNELINFO.keys())
+
+        # Filter by existence
+        if exists:
+            basenames = [b for b in basenames if b in _KernelInfo.ABSPATHS]
+
+        # Sort
+        basenames = list(basenames)
+        basenames.sort(key=sort_key)
+        return basenames
+
+    @staticmethod
+    def basename_sort_key(option):
+        """A function that returns a key function for sorting basenames or KernelFiles.
+
+        Options are:
+            "alpha"         sort basenames alphabetically (caseless);
+            "version"       sort by version, then alphabetically;
+            "date"          sort by release date, then alphabetically;
+            any function    use this function as the sort key.
         """
 
         def version_sort_key(basename):
             """Key for sorting versions. Integers and tuples of integers are sorted
             together. Strings sort as greater than integers or tuples. Missing versions
-            sort last.
+            sort lowest.
             """
 
             version = KernelFile(basename).version
             if isinstance(version, numbers.Integral):
-                return (0, version)
+                return (1, version)
             if isinstance(version, tuple):
-                return (0,) + version
+                return (1,) + version
+            if not version:         # put basenames with unknown version lowest
+                return (0,)
+            return (2, version)
 
-            if not version:         # put basenames with unknown version last
-                return (2, basename)
+        if option == 'alpha':
+            return lambda basename: KernelFile(basename).basename.lower()
 
-            return (1, version)
+        if option == 'date':
+            return lambda basename: (KernelFile(basename).release_date,
+                                     KernelFile(basename).basename.lower())
 
-        def sort_key(basename):
-            items = []
-            for option in sort:
-                if option == 'alpha':
-                    items.append(basename)
-                elif option == 'caseless':
-                    items.append(basename.lower())
-                elif option == 'date':
-                    items.append(KernelFile(basename).release_date)
-                elif option == 'version':
-                    items.append(version_sort_key(basename))
-                elif hasattr(option, '__call__'):
-                    items.append(option(basename))
-                else:
-                    raise ValueError('invalid sort option: ' + repr(option))
+        if option == 'version':
+            return lambda basename: (version_sort_key(basename),
+                                     KernelFile(basename).basename.lower())
 
-        # Begin active code
+        if hasattr(option, '__call__'):
+            return lambda basename: option(KernelFile(basename).basename)
 
-        if not isinstance(sort, (tuple,list)):
-            sort = (sort,)
+        raise ValueError('invalid sort option: ' + repr(option))
 
-        # Get the un-ordered list of basenames
-        if regex:
-            basenames = set()
-            if not isinstance(regex, (list, tuple, set)):
-                regex = [regex]
-            for pattern in regex:
-                if isinstance(pattern, str):
+    ######################################################################################
+    # Veto and superseder management
+    ######################################################################################
+
+    # These are lists of lists of compiled regular expressions. If the first item in each
+    # sub-list matches a file basename, then the remaining regular expressions are used.
+    # If the first item contains capturing sub-patterns, these can be referenced in the
+    # subsequent items, which are stored as tuples (string, flags) instead of compiled
+    # expressions.
+    _VETOS = []
+    _SUPERSEDERS = []
+
+    @staticmethod
+    def mutual_veto(*patterns, flags=re.IGNORECASE):
+        """Ensure that if a kernel is furnished whose basename matches one of the given
+        patterns, any overlapping kernel matching onee of the patterns will be unloaded.
+        """
+
+        patterns = KernelFile._compile(patterns, flags=flags, subs=False)
+            # this is a list of patterns
+
+        for pattern in patterns:
+            KernelFile._VETOS.append([pattern] + patterns)
+
+    @staticmethod
+    def group_vetos(*patterns, flags=re.IGNORECASE):
+        """Ensure that if a kernel is furnished whose basename matches any of the given
+        patterns, any overlapping kernels whose basename matches one of the other patterns
+        will be unloaded.
+
+        Multiple patterns can be specified inside a tuple, list, or set.
+        """
+
+        patterns = [KernelFile._compile(p, flags=flags, subs=False) for p in patterns]
+            # this is a list of lists of patterns
+
+        for k in range(len(patterns)):
+            selection = patterns[k]         # list of one or more patterns
+            remainders = list(patterns)     # copy the list of lists
+            remainders.pop(k)               # remove the selection
+            other_patterns = []             # convert remainders to a list of patterns
+            for remainder in remainders:
+                other_patterns += remainder
+
+            for pattern in selection:
+                KernelFile._VETOS.append([pattern] + other_patterns)
+
+    @staticmethod
+    def veto(patterns, *vetos, flags=re.IGNORECASE):
+        """Ensure that if a kernel is furnished whose basename matches the first pattern,
+        any overlapping kernel whose name matches one of the veto pattern will be
+        unloaded.
+
+        Multiple patterns can be specified inside a tuple, list, or set. If the first
+        input contains capturing sequences, these can be referenced in the remaining
+        patterns.
+        """
+
+        patterns = KernelFile._compile(patterns, flags=flags, subs=False)
+        vetos = KernelFile._compile(vetos, flags=flags, subs=True)
+            # Each is a list of patterns
+
+        for pattern in patterns:
+            KernelFile._VETOS.append([pattern] + vetos)
+
+    @staticmethod
+    def supersede(above, *below, flags=re.IGNORECASE):
+        """Ensure that if a kernel is furnished whose basename matches the first pattern,
+        it will be furnished at a higher precedence than any overlapping kernel already
+        furnished whose basename matches the second pattern.
+
+        Multiple "above" patterns can be specified inside a tuple, list, or set. If this
+        input contains capturing sequences, these can be referenced in the "below"
+        patterns.
+        """
+
+        above = KernelFile._compile(above, flags=flags)
+        below = KernelFile._compile(below, flags=flags)
+            # Each is a list of patterns
+
+        for pattern in above:
+            KernelFile._SUPERSEDERS.append([pattern] + below)
+
+    @staticmethod
+    def _compile(patterns, flags=re.IGNORECASE, subs=False):
+        """Convert one pattern or list of patterns to a list of compiled patterns.
+
+        Patterns containing replacement patterns cannot be compiled; they are instead
+        returned as tuples (string, flags).
+        """
+
+        if not isinstance(patterns, (list, set, tuple)):
+            patterns = (patterns,)
+
+        result = []
+        for pattern in patterns:
+            if not isinstance(pattern, re.Pattern):
+                if is_basename(pattern):    # convert a basename to a regular expression
+                    pattern = pattern.replace('.', r'\.')
+                try:
                     pattern = re.compile(pattern, flags=flags)
-                ext = '.' + pattern.pattern.rpartition('.')[-1].lower()
-                if ext in _EXTENSIONS:
-                    source_list = _KernelInfo._BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
-                elif ktype:
-                    source_list = _KernelInfo._BASENAMES_BY_KTYPE[_EXTENSIONS[ext]]
-                else:
-                    source_list = _KernelInfo.ABSPATHS.keys()
-                basenames |= {b for b in source_list if pattern.fullmatch(b)}
-        else:
-            if ktype:
-                basenames = _KernelInfo._BASENAMES_BY_KTYPE[ktype]
-            else:
-                basenames = set(_KernelInfo.ABSPATHS.keys())
+                except re.error:
+                    if subs:
+                        pattern = (pattern, flags)
+                    else:
+                        raise
 
-        # Filter by family
-        if family:
-            if isinstance(family, (tuple, list, set)):
-                family = set(family)
-            else:
-                family = {family}
+            result.append(pattern)
 
-            basenames = {b for b in basenames if KernelFile(b).family in family}
+        return result
 
-        # Filter by version
-        if version is not None:
-            if isinstance(version, (list, set)):
-                version = set(version)
-            else:
-                version = {version}
+    @staticmethod
+    def _get_vetos_or_superseders(basename, source):
+        """The list of compiled regular expressions that match this basename."""
 
-            basenames = {b for b in basenames if version & KernelFile(b).version_set}
+        matches = []
+        for item_list in source:
+            match = item_list[0].fullmatch(basename)
+            if match:
+                for item in item_list[1:]:
+                    if isinstance(item, tuple):
+                        (template, flags) = item
+                        matches.append(re.compile(match.expand(template), flags=flags))
+                    else:
+                        matches.append(item)
 
-        # Sort
-        basenames.sort(key=sort_key)
+        return matches
 
-        # If there's no order input, return the sorted list
-        if not order:
-            return basenames
+    @staticmethod
+    def _get_vetos(basename):
+        """The list of compiled regular expressions that this basename vetos."""
 
-        # Sort the found names to match the sorted list
-        sorted_locals = [b for b in order if b in basenames]
+        return KernelFile._get_vetos_or_superseders(basename, source=KernelFile._VETOS)
 
-        # If there are no extras, we're done
-        if len(basenames) == len(sorted_locals):
-            return sorted_locals
+    @staticmethod
+    def _get_superseders(basename):
+        """The list of compiled regular expressions that this basename supersedes."""
 
-        # Identify the extra basenames
-        extras = [b for b in basenames if b not in sorted_locals]
+        return KernelFile._get_vetos_or_superseders(basename,
+                                                    source=KernelFile._SUPERSEDERS)
 
-        # Merge the lists
-        merged = sorted_locals
-        vdict = {b:sort_key(b) for b in merged}
-
-        for extra in extras:
-            key = sort_key(extra)
-            vdict[extra] = key
-            where_le = [k for k, basename in enumerate(merged)
-                        if vdict[basename] <= key]
-            if where_le:
-                merged.insert(max(where_le) + 1, extra)
-            else:
-                merged.append(extra)
-
-        return merged
-
-############################################################
+##########################################################################################
 # Include the _localfiles functions as class methods
-############################################################
+##########################################################################################
 
 KernelFile.initialize = _localfiles.initialize
 KernelFile.walk       = _localfiles.walk
 KernelFile.use_path   = _localfiles.use_path
 KernelFile.use_paths  = _localfiles.use_paths
 
-############################################################
+##########################################################################################
 # Enable the Kernel class to access this subclass
-############################################################
+##########################################################################################
 
 Kernel.KernelFile = KernelFile
 

@@ -6,352 +6,245 @@ spyceman.hosts.Cassini: Support for Cassini-specific kernels.
 
 The following attributes are defined:
 
-VG1, VG2        the body IDs of Voyager 1 and Voyager 2.
-VG1_ISSNA, ...  the frame IDs of all the Voyager instruments.
+NAME            'CASSINI'.
+BODY_ID         the body ID of Cassini, -82.
+FRAME_IDS       a dictionary mapping frame name or (instrument, component) to frame ID.
+FRAME_NAMES     a dictionary mapping frame ID to frame name.
+INSTRUMENT_NAMES set of all instrument names.
+INSTRUMENT_IDS  a dictionary mapping each instrument to the associated set of frame IDs.
 
 The following functions are defined:
 
-ck()            function returning a C (pointing) kernel given various constraints.
-fk()            function returning a frames kernel given various constraints.
-ik()            function returning an instrument kernel given various constraints.
-sclk()          function returning a clock kernel given various constraints.
-spk()           function returning a SP (trajectory) kernel given various constraints.
-metakernel()    function returning a Metakernel containing all of the above.
+spk()           function returning a C (pointing) kernel for any part of the mission.
+fk()            function returning a frames kernel.
+ik()            function returning an instrument kernel.
+sclk()          function returning a spacecraft clock kernel.
+spk()           function returning an SP (trajectory) kernel for any part of the mission.
+meta()          function returning a Metakernel containing all of the above.
+
+The following, more focused kernel functions are also available, although the ones listed
+above will meet most users' needs:
+
+gapfill_ck()    a low-precedence "gapfill" CK for the Saturn tour.
+jupiter_ck()    a CK for the Jupiter flyby.
+
+cruise_spk()    SPK for the cruise to Saturn including the Jupiter flyby.
+small_satellite_spk()       SPK for Saturn's small satellites.
+irregular_satellite_spk()   SPK for Saturn's irregular satellites.
 """
 
-BODY_ID = -81
+from spyceman.kernelfile  import KernelFile
+from spyceman.metakernel  import Metakernel
+from spyceman.rule        import Rule
+from spyceman.spicefunc   import spicefunc
 
-_TIME_LIMITS = {
-    'VENUS'   : ('1998-04-18', '1999-06-25'),
-    'EARTH'   : ('1999-08-16', '1999-09-15'),
-    'MASURSKY': ('2000-01-23', '2000-01-24'),
-    'JUPITER' : ('1999-08-19', '2001-03-24'),
-    'SATURN'  : ('2004-01-01', '2017-09-16'),
+from .ck     import gapfill_ck, jupiter_ck, ck
+from .spk    import cruise_spk, small_satellite_spk, irregular_satellite_spk, spk
+from ._utils import BODY_ID, _source
+
+NAME = 'CASSINI'
+
+INSTRUMENT_NAMES = {'CAPS', 'CDA', 'CIRS', 'INMS', 'ISS', 'MAG', 'MIMI', 'RADAR', 'RPWS',
+                    'RSS', 'UVIS', 'VIMS'}
+
+FRAME_IDS = {   # from cas_v43.tf
+    'SC_COORD'     : -82000,
+    'HGA'          : -82101,
+    'LGA1'         : -82102,
+    'LGA2'         : -82103,
+    'XBAND'        : -82104,
+    'KABAND'       : -82105,
+    'KUBAND'       : -82106,
+    'SBAND'        : -82107,
+    'XBAND_TRUE'   : -82108,
+    'ISS_NAC'      : -82360,
+    'ISS_WAC'      : -82361,
+    'CIRS_FP1'     : -82890,
+    'CIRS_FP3'     : -82891,
+    'CIRS_FP4'     : -82892,
+    'CIRS_FPB'     : -82893,
+    'UVIS_FUV'     : -82840,
+    'UVIS_EUV'     : -82842,
+    'UVIS_SOLAR'   : -82843,
+    'UVIS_SOL_OFF' : -82849,
+    'UVIS_HSP'     : -82844,
+    'UVIS_HDAC'    : -82845,
+    'VIMS_V'       : -82370,
+    'VIMS_IR'      : -82371,
+    'VIMS_IR_SOL'  : -82372,
+    'CAPS'         : -82820,
+    'CDA'          : -82790,
+    'INMS'         : -82740,
+    'MAG_PLUS'     : -82350,
+    'MAG_MINUS'    : -82351,
+    'MIMI_CHEMS'   : -82760,
+    'MIMI_INCA'    : -82761,
+    'MIMI_LEMMS1'  : -82762,
+    'MIMI_LEMMS2'  : -82763,
+    'RADAR_1'      : -82810,
+    'RADAR_2'      : -82811,
+    'RADAR_3'      : -82812,
+    'RADAR_4'      : -82813,
+    'RADAR_5'      : -82814,
+    'RPWS'         : -82730,
+    'RPWS_EXPLUS'  : -82731,
+    'RPWS_EXMINUS' : -82732,
+    'RPWS_EZPLUS'  : -82733,
+    'RPWS_LP'      : -82734,
+    'RPWS_EDIPOLE' : -82735,
+    'RPWS_EXZPLANE': -82736,
+    'RPWS_EXPZP'   : -82737,
+    'RPWS_EXMZP'   : -82738,
+    'RPWS_EDPZP'   : -82739,
 }
 
-_BODY_IDS = {
-    'VENUS'   : {BODY_ID, 2, 299},
-    'EARTH'   : {BODY_ID, 3, 301, 399},
-    'MASURSKY': {BODY_ID, 2002685},
-    'JUPITER' : {BODY_ID, 5, 599} + set(range(501, 517)),
-    'SATURN'  : {BODY_ID} + Saturn.SYSTEM,
-}
+FRAME_NAMES = {v:k for k,v in FRAME_IDS.items()}
 
-from .spk import spk
-from .ck import ck
+FRAME_IDS['SC'] = FRAME_IDS['SC_COORD']     # alt name
 
+# Add keys that are tuples (instrument, component) and then clean up
+keys = list(FRAME_IDS.keys())
+for key in keys:
+    parts = key.partition('_')
+    if parts[1] == '_':
+        FRAME_IDS[parts[0], parts[2]] = FRAME_IDS[key]
 
-from spyceman         import CSPYCE, KernelFile, KTuple, Metakernel, Rule, spicefunc
-from spyceman.planets import Jupiter, Saturn, Uranus, Neptune
+del FRAME_IDS['SC', 'COORD']    # "SC_COORD" has a different use of underscore
 
+# RSS is not in the frame names for the antennas
+for key in ('HGA', 'LGA1', 'LGA2', 'XBAND', 'KABAND', 'KUBAND', 'SBAND', 'XBAND_TRUE'):
+    FRAME_IDS['RSS', key] = FRAME_IDS[key]
 
-from ./SPK_RECONSTRUCTED_V1 import SPK_RECONSTRUCTED_V1
-from ./SPK_RECONSTRUCTED_V2 import SPK_RECONSTRUCTED_V2
-from ./SPK_RECONSTRUCTED_V3 import SPK_RECONSTRUCTED_V3
+INSTRUMENT_IDS = {k:set() for k in INSTRUMENT_NAMES}
+for key, frame_id in FRAME_IDS.items():
+    if key in INSTRUMENT_NAMES:
+        INSTRUMENT_IDS[key].add(frame_id)
+    elif isinstance(key, tuple) and key[0] in INSTRUMENT_NAMES:
+        INSTRUMENT_IDS[key[0]].add(frame_id)
 
+del frame_id,  key, keys, parts
 
+##########################################################################################
+# FKs
+##########################################################################################
 
+from ._CASSINI_FKS import _CASSINI_FKS
 
+rule = Rule(r'cas_v(NN)\.tf', mission='CASSINI',  source=_source('FK'), dest='Cassini/FK')
+KernelFile.mutual_veto(rule.pattern)
 
+fk_source = _source('FK')
+fk_source = [fk_source] + [fk_source + f'/release.{i:02d}' for i in range(1, 14)]
 
+fk_notes = """\
+    The final Cassini frames kernel is version 43.
+"""
 
+fk = spicefunc('fk', title='Cassini FK',
+               known=_CASSINI_FKS,
+               unknown=rule.pattern, source=fk_source,
+               exclude=True,    # never more than one
+               notes=fk_notes)
 
+del rule, fk_source, fk_notes
 
-def _cassini_spk_kernels():
-    """Create a Kernel object with a planetary system prerequisite for each Voyager SPK.
+##########################################################################################
+# IKs
+##########################################################################################
 
-    This cannot happen at import time because the KernelFile.walk() might not have been
-    called yet.
+from ._CASSINI_IKS import _CASSINI_IKS
+
+rule = Rule(r'cas_(?P<instrument>[a-z]+)_v(NN)\.ti', mission='CASSINI',
+            instrument=str.upper, source=_source('IK'), dest='Cassini/IK')
+KernelFile.veto(r'cas_([a-z]+)_v(\d\d)\.ti', r'cas_\1_v\d\d\.ti')
+
+ik_source = _source('IK')
+ik_source = [ik_source] + [ik_source + f'/release.{i:02d}' for i in range(1, 14)]
+
+ik_notes = """\
+    This function returns an Instrument Kernel object for one or more instruments.
+
+    The last versions of these files are: CAPS=3, CDA=1, CIRS=10, INMS=2, ISS=10, MAG=1,
+    MIMI=11, RADAR=11, RPWS=1, RSS=3, UVIS=7, VIMS=6.
+"""
+
+ik_docstrings = {'instrument': """\
+        instrument  One or more of the Cassini instruments: "CAPS", "CDA", "CIRS", "INMS",
+                    "ISS", "MAG", "MIMI", "RADAR", "RPWS", "RSS", "UVIS", or "VIMS". Use
+                    None or an empty set to include all instruments.
+"""}
+
+ik = spicefunc('ik', title='Cassini IK',
+               known=_CASSINI_IKS,
+               unknown=rule.pattern, source=ik_source,
+               exclude=('instrument',),
+               notes=ik_notes, docstrings=ik_docstrings)
+
+del rule, ik_source, ik_notes, ik_docstrings
+
+##########################################################################################
+# SCLKs
+##########################################################################################
+
+from ._CASSINI_SCLKS import _CASSINI_SCLKS
+
+rule = Rule(r'cas(NNNNN)\.tsc', mission='CASSINI', source=_source('SCLK'),
+            dest='Cassini/SCLK')
+KernelFile.mutual_veto(rule.pattern)
+
+sclk_notes = """\
+
+    The final Cassini clock kernel is version 172. However, it differs from all prior
+    clock kernels in that it corrects an error or nearly one second that appeared in
+    earlier kernels. Users who which to reconstruct work that they did prior to 2018 might
+    consider using version 171.
+"""
+
+sclk = spicefunc('sclk', title='Cassini SCLK',
+                 known=_CASSINI_SCLKS,
+                 unknown=rule.pattern, source=_source('SCLK'),
+                 exclude=True,      # never more than one
+                 notes=sclk_notes)
+
+del rule, sclk_notes
+
+##########################################################################################
+# Metakernel...
+##########################################################################################
+
+def meta(planet=None, instrument=None, *, irregular=False,
+         tmin=None, tmax=None, ids=None,
+         ck={}, fk={}, ik={}, sclk={}, spk={}):
+    """A metakernel object for the Cassini mission or any subset thereof.
+
+    Input:
+        planet      one or more of "VENUS", "EARTH", "MASURSKY", or "JUPITER", or
+                    "SATURN", indicating the phase(s) of the Cassini mission that this
+                    metakernel should cover. If not specified, "SATURN" is the default.
+                    "ISS", "MAG", "MIMI", "RADAR", "RPWS", "RSS", "UVIS", or "VIMS". Use
+                    None or an empty set to include all instruments.
+        irregular   True to include Saturn's planet's irregular satellites in the SPK.
+        ck, fk, ik, sclk, spk
+                    optional dictionaries listing any non-default inputs to one of the
+                    Cassini kernel functions of the same name.
     """
 
-    kernels = []
-
-    # For every existing Voyager SPK...
-    basenames = KernelFile.find_all(r'vgr?[12]_(jup|sat|ura|nep).*\.bsp')
-    for basename in basenames:
-
-        # Determine the spacecraft and planet
-        kfile = KernelFile(basename)
-        voyager = kfile.properties['voyager']
-        planet_key = kfile.properties['planet'][:3].lower()
-
-        # Focus on the relevant date range
-        (tmin, tmax) = _DATE_RANGES[voyager, planet_key]
-
-        # Define a planetary system SPK for the same version number as the prerequisite
-        planet_key = basename.partition('_')[1][:3].lower()
-        module = _MODULES[planet_key]
-        prereq = module.spk(tmin=tmin, tmax=tmax, ids=module.SYSTEM,
-                            version=kfile.version, expand=True)
-        kfile.require(prereq)
-
-        # Exclude any other SPK for this spacecraft and planet
-        kfile.exclude(f'vgr?{voyager}_{planet_key}.*\\.bsp')
-
-        kernels.append(kfile)
-
-    return kernels
-
-spk = spicefunc('spk', title='Voyager SPKs',
-                pattern=r'vgr?[12]_(jup|sat|ura|nep).*\.bsp',
-                known=_voyager_spk_kernels,
-                exclusions=('voyager', 'planet'),
-                propnames=('voyager', 'planet'), docstrings=DOCSTRINGS)
-
-
-
-
-
-import numpy as np
-import os
-
-import julian
-import kernel
-import textkernel
-
-import .spice_support as spice
-
-
-class Cassini(object):
-    """An instance-free class to hold Cassini-specific parameters."""
-
-    loaded_instruments = []
-
-    initialized = False
-    manual_cks = False
-    manual_spk = False
-
-    ######################################################################################
-
-    @staticmethod
-    def initialize(ck='', planets=None, asof=None,
-                   spk='', gapfill=True,
-                   mst_pck=True, irregulars=True, sclk=''):
-        """Intialize the Cassini mission internals.
-
-        After the first call, later calls to this function are ignored.
-
-        Input:
-            ck,spk      Used to specify which C and SPK kernels are used, or
-                        blank for the default;
-                        'none' to allow manual control of the C kernels.
-            planets     A list of planets to pass to define_solar_system. None
-                        or 0 means all.
-            asof        Only use SPICE kernels that existed before this date;
-                        None to ignore.
-            gapfill     True to include gapfill CKs. False otherwise.
-            mst_pck     True to include MST PCKs, which update the rotation
-                        models for some of the small moons.
-            irregulars  True to include the irregular satellites;
-                        False otherwise.
-            sclk        which SCLK to use, one of "tour" or "reconstructed". Use
-                        blank for the default, "reconstructed".
-        """
-
-        if Cassini.initialized:
-            return
-
-        # Define some important paths and frames
-        Body.define_solar_system(Cassini.START_TIME, Cassini.STOP_TIME,
-                                 asof=asof,
-                                 planets=planets,
-                                 mst_pck=mst_pck,
-                                 irregulars=irregulars)
-
-        _ = oops.path.SpicePath('CASSINI', 'SATURN')
-
-        ck = ck.lower()
-        spk = spk.lower()
-
-        Cassini.manual_cks = ck == 'none'
-        Cassini.manual_spks = spk == 'none'
-
-        if not Cassini.manual_cks:
-            spice.select_saturn_ck(ck)
-
-        if not Cassini.manual_spks:
-            spice.select_saturn_spk(spk)
-
-        spice.furnish_sclk(sclk.lower())
-        spice.furnish_fk()
-
-        Cassini.initialized = True
-
-    #===========================================================================
-    @staticmethod
-    def reset():
-        """Reset the internal parameters.
-
-        Can be useful for debugging.
-        """
-
-        spice.unload_ck()
-        spice.unload_spk()
-        spice.unload_sclk()
-        spice.unload_fk()
-        spice.unload_ik()
-
-        Cassini.loaded_instruments = []
-        Cassini.initialized = False
-
-    #===========================================================================
-    @staticmethod
-    def load_ck(t):
-        """Ensure that the C kernels applicable at or near the given time in
-        seconds TDB have been furnished and prioritized.
-        """
-
-        if not Cassini.manual_cks:
-            spice.furnish_ck(t)
-
-    #===========================================================================
-    @staticmethod
-    def load_cks(t0, t1):
-        """Ensure that all the C kernels applicable near or within the time
-        interval tdb0 to tdb1 have been furnished.
-        """
-
-        if not Cassini.manual_cks:
-            spice.furnish_ck(t0, t1)
-
-    #===========================================================================
-    @staticmethod
-    def load_spk(t):
-        """Ensure that the SPK kernels applicable at or near the given time in
-        seconds TDB have been furnished.
-        """
-
-        if not Cassini.manual_spks:
-            spice.furnish_spk(t)
-
-    #===========================================================================
-    @staticmethod
-    def load_spks(t0, t1):
-        """Ensure that all the SPK kernels applicable near or within the time
-        interval tdb0 to tdb1 have been furnished.
-        """
-
-        if not Cassini.manual_spks:
-            spice.furnish_spk(t0, t1)
-
-    ######################################################################################
-    # Routines for managing the loading other kernels
-    ############################################################################
-
-    @staticmethod
-    def load_instruments(instruments=[], asof=None):
-        """Load the SPICE kernels and defines the basic paths and frames for
-        the Cassini mission.
-
-        It is generally only to be called once.
-
-        Input:
-            instruments an optional list of instrument names for which to load
-                        frames kernels. The frames for ISS, VIMS, UVIS, and CIRS
-                        are always loaded.
-
-            asof        if this specifies a date or date-time in ISO format,
-                        then only kernels that existed before the specified date
-                        are used. Otherwise, the most recent versions are always
-                        loaded. IGNORED.
-        """
-
-        # Furnish instruments
-        for inst in instruments:
-            if inst not in Cassini.loaded_instruments:
-                spice.furnish_ik(inst)
-                Cassini.loaded_instruments.append(inst)
-
-    ############################################################################
-    # Routines for managing text kernel information
-    ############################################################################
-
-    @staticmethod
-    def spice_instrument_kernel(inst, asof=None):
-        """A dictionary containing the Instrument Kernel information.
-
-        Also furnishes it for use by the SPICE tools.
-
-        Input:
-            inst        one of "ISS", "UVIS", "VIMS", "CIRS", etc.
-            asof        an optional date in the past, in ISO date or date-time
-                        format. If provided, then the information provided will
-                        be applicable as of that date. Otherwise, the most
-                        recent information is always provided. IGNORED.
-
-        Return:         a tuple containing:
-                            the dictionary generated by textkernel.from_file()
-                            the name of the kernel.
-        """
-
-        kfile = spice.selected_ik(inst)
-        return (kfile.as_dict(), [kfile.name])
-
-    #===========================================================================
-    @staticmethod
-    def spice_frames_kernel(asof=None):
-        """A dictionary containing the Cassini Frames Kernel information.
-
-        Also furnishes the kernels for use by the SPICE tools.
-
-        Input:
-            asof        an optional date in the past, in ISO date or date-time
-                        format. If provided, then the information provided will
-                        be applicable as of that date. Otherwise, the most
-                        recent information is always provided. IGNORED.
-
-        Return:         a tuple containing:
-                            the dictionary generated by textkernel.from_file()
-                            an ordered list of the names of the kernels
-        """
-
-        kfile = spice.selected_fk()
-        return (kfile.as_dict(), [kfile.name])
-
-    #===========================================================================
-    @staticmethod
-    def used_kernels(time, inst, return_all_planets=False):
-        """The list of kernels associated with a Cassini observation at a
-        selected range of times.
-        """
-
-        if return_all_planets:
-            bodies = [1, 199, 2, 299, 3, 399, 4, 499, 5, 599, 6, 699,
-                      7, 799, 8, 899]
-            if time[0] >= TOUR:
-                bodies += Body.SATURN_MOONS_LOADED
-            else:
-                bodies += Body.JUPITER_MOONS_LOADED
-        else:
-            if time[0] >= TOUR:
-                bodies = [6, 699] + Body.SATURN_MOONS_LOADED
-            else:
-                bodies = [5, 599] + Body.JUPITER_MOONS_LOADED
-
-        used = spicedb.used_basenames(time=time, bodies=bodies)
-
-        used += [spice.selected_fk().name, spice.selected_sclk().name]
-
-        if inst:
-            used.append(spice.selected_ik(inst).name)
-
-        if time is not None:
-            if isinstance(time, (str, numbers.Real)):
-                time = [time, time]
-
-            time_tdb = []
-            for tval in time:
-                if isinstance(tval, str):
-                    tdb = julian.tdb_from_tai(julian.tai_from_iso(tval))
-                    time_tdb.append(tdb)
-                else:
-                    time_tdb.append(tval)
-
-            (tmin, tmax) = time_tdb
-
-            used += furnish_spk(tmin, tmax, usage=[])
-            used += furnish_ck( tmin, tmax, usage=[])
-
-        return used
-
-################################################################################
+    # _meta avoids the name conflicts between ck the input and ck the function, etc.
+    return _meta(planet=planet, instrument=instrument, irregular=irregular,
+                 tmin=tmin, tmax=tmax, ids=ids,
+                 ck_=ck, fk_=fk, ik_=ik, sclk_=sclk, spk_=spk)
+
+def _meta(*, planet, instrument, irregular, tmin, tmax, ids,
+          ck_, fk_, ik_, pck_, sclk_, spk_):
+
+    ck_   = ck(planet=planet, instrument=instrument,
+               tmin=tmin, tmax=tmax, ids=ids, **ck_)
+    fk_   = fk(ids=ids, **fk_)
+    ik_   = ik(instrument=instrument, ids=ids, **ik_)
+    sclk_ = sclk(**sclk_)
+    spk_  = spk(planet=planet, irregular=irregular,
+                tmin=tmin, tmax=tmax, ids=ids, **spk_)
+
+    return Metakernel([ck_, fk_, ik_, sclk_, spk_])
+
+##########################################################################################

@@ -1,173 +1,122 @@
 ##########################################################################################
-# spyceman/planets/neptune.py: Kernel management for the Neptune system
-#
-# Kernel info last updated 3/19/23
+# spyceman/planets/Neptune.py: Kernel management for the Neptune system
 ##########################################################################################
 """\
-spyceman.planets.neptune: Support for Neptune-specific kernels.
+Support for Neptune-specific kernels. Last updated 2024-02-01.
 
 The following attributes are defined:
 
+NAME            "NEPTUNE".
 ALL_MOONS       the set of all IDs for Neptune's moons, including aliases.
 CLASSICAL       a set with the IDs of Triton and Nereid.
 SMALL_INNER     the set of IDs of the small inner moons.
-REGULAR         the set of IDs of the regular satellites.
+REGULAR         the set of IDs of the regular satellites, including Triton.
 IRREGULAR       the set of IDs of the irregular satellites, including Nereid.
 UNNAMED         the set of IDs of moons that are not yet officially named.
-ID              the NAIF ID of Neptune.
+BODY_ID         the body ID of Neptune.
 SYSTEM          the set of IDs of the planet and all inner or classical moons.
 ALL_IDS         the set of IDs of the planet and all moons.
 BARYCENTER      the NAIF ID of the Neptune system barycenter.
+BODY_IDS        dictionary that maps every body name to its body ID.
+BODY_NAMES      dictionary that maps every body ID to its name.
+
+FRAME_ID        the NAIF ID of the Neptune rotation frame.
+FRAME_IDS       dictionary that maps every body name to its frame ID.
+FRAME_CENTERS   dictionary that maps every frame ID to the body ID of its center.
+
+The following functions are defined:
+
 spk()           a Kernel object derived from one or more Neptune SPK files.
 """
 
-from spyceman import CSPYCE, KTuple, spicefunc
+import warnings
 
-def srange(*args):
-    return set(range(*args))
+from spyceman.rule        import Rule
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
+from spyceman.spicefunc   import spicefunc
+from spyceman._cspyce     import CSPYCE
+
+##########################################################################################
+# Categorize Neptune's moons and their SPICE IDs
+##########################################################################################
+
+NAME       = 'NEPTUNE'
+BODY_ID    = 899
+BARYCENTER = BODY_ID // 100
+BODY_IDS   = {NAME: BODY_ID, 'BARYCENTER': BARYCENTER, NAME + ' BARYCENTER': BARYCENTER}
+BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
+
+try:
+    CSPYCE.define_body_aliases(814, 'HIPPOCAMP')
+except RuntimeError:
+    warnings.warn('Pool overflow at ("HIPPOCAMP", 814)')
+
+ALL_MOONS = _srange(801, 815)
+for body_id in ALL_MOONS:
+    body_name, found = CSPYCE.bodc2n(body_id)
+    if found:
+        BODY_IDS[body_name] = body_id
+        BODY_NAMES[body_id] = body_name
+    else:
+        warnings.warn('name not identified for body ' + repr(body_id))
 
 # Categorize moons
 CLASSICAL   = {801, 802}                        # includes Nereid
-SMALL_INNER = srange(803, 809) | {814}
-IRREGULAR   = {802} | srange(809, 814)          # also includes Nereid
-ALL_MOONS   = srange(801, 815)
+SMALL_INNER = _srange(803, 809) | {814}
+IRREGULAR   = {802} | _srange(809, 814)         # also includes Nereid
 UNNAMED     = set()
 REGULAR     = ALL_MOONS - IRREGULAR
 
-ID          = 899
-SYSTEM      = {ID} | CLASSICAL | SMALL_INNER
-ALL_IDS     = {ID} | ALL_MOONS
-BARYCENTER  = 8
+SYSTEM      = {BODY_ID} | CLASSICAL | SMALL_INNER
+ALL_IDS     = {BODY_ID} | ALL_MOONS
+
+del _srange, body_id, body_name, found
 
 ##########################################################################################
-# Managed list of known NEPnnn SPK kernels
+# Frames
 ##########################################################################################
 
-SPK_INFO = [
+FRAME_ID, frame_name, found = CSPYCE.cidfrm(NAME)
+FRAME_IDS = {NAME: FRAME_ID}
+FRAME_CENTERS = {FRAME_ID: BODY_ID}
+for body_name, body_id in BODY_IDS.items():
+    frame_id, frame_name, found = CSPYCE.cidfrm(body_id)
+    if not found:
+        frame_id = body_id      # if not already defined, use the body ID as the frame ID
 
-KTuple('nep016-95-05.bsp',
-    '1995-01-01T00:00:00', '2005-01-01T00:00:00',
-    {3, 8, 10, 301, 399, 801, 802, 899},
-    '1992-05-04'),
-KTuple('nep016-6.bsp',
-    '1979-12-31T23:59:09.816', '2048-12-29T23:58:50.816',
-    {3, 6, 10, 399, 801, 802, 899},
-    '2002-08-26'),
-KTuple('nep016.bsp',
-    '1979-12-28T23:59:09.816', '2024-12-31T23:58:50.816',
-    {3, 8, 10, 301, 399, 801, 802, 899},
-    '1992-05-04'),
-KTuple('nep022m.bsp',
-    '1997-12-31T23:58:56.816', '2009-12-31T23:58:53.816',
-    {803, 804, 805, 806, 807, 808},
-    '1998-05-19'),
-KTuple('nep022.bsp',
-    '1997-12-31T23:58:56.816', '2009-12-31T23:58:53.816',
-    {803, 804, 805, 806, 807, 808},
-    '1996-04-22'),
-KTuple('nep029.bsp',
-    '1993-12-31T23:58:59.816', '2003-12-31T23:58:55.816',
-    {3, 8, 10, 399, 809, 810, 811, 899},
-    '2003-01-21'),
-KTuple('nep050_old.bsp',
-    '1989-06-07T00:00:00', '2023-12-31T23:59:56',
-    {3, 8, 10, 399, 803, 804, 805, 806, 807, 808, 899},
-    '2004-07-14'),
-KTuple('nep050.bsp',
-    '1989-06-07T00:00:00', '2048-12-28T23:59:56',
-    {3, 8, 10, 399, 803, 804, 805, 806, 807, 808, 899},
-    '2007-03-31'),
-KTuple('nep055.bsp',
-    '2000-01-01T00:00:00', '2024-12-31T23:57:56',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2005-07-26'),
-KTuple('nep056.bsp',
-    '1980-01-03T00:00:00', '2048-12-24T23:59:56',
-    {3, 8, 10, 399, 802, 899},
-    '2005-07-26'),
-KTuple('nep057.bsp',
-    '2000-01-01T00:00:00', '2048-12-28T23:59:56',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2007-03-28'),
-KTuple('nep076-long.bsp',
-    '1950-01-01T00:00:09', '2199-12-31T23:59:57',
-    {3, 8, 10, 399, 801, 802, 899},
-    '2008-04-07'),
-KTuple('nep076.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:56',
-    {3, 8, 10, 399, 801, 802, 899},
-    '2008-04-07'),
-KTuple('nep077.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:56',
-    {3, 8, 10, 399, 803, 804, 805, 806, 807, 808, 899},
-    '2008-04-11'),
-KTuple('nep078.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:56',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2008-04-11'),
-KTuple('nep081xl.bsp',
-    '1599-12-02T23:59:27.817', '2599-12-31T23:58:50.816',
-    {801, 802, 899},
-    '2016-06-29'),
-KTuple('nep081.bsp',
-    '1900-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 8, 10, 399, 801, 802, 808, 899},
-    '2009-03-27'),
-KTuple('nep085.bsp',
-    '1900-01-01T00:00:09', '2099-12-21T23:59:57',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2010-10-21'),
-KTuple('nep086.bsp',
-    '1900-01-01T00:00:09', '2100-01-01T23:59:58',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2013-12-12'),
-KTuple('nep087.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:58',
-    {3, 8, 10, 399, 814, 899},
-    '2013-07-15'),
-KTuple('nep088.bsp',
-    '1950-01-01T00:00:09', '2099-12-31T23:59:58',
-    {3, 8, 10, 399, 803, 804, 805, 806, 807, 814, 899},
-    '2015-04-28'),
-KTuple('nep090.bsp',
-    '1949-12-31T23:59:29.816', '2049-12-30T23:58:50.816',
-    {3, 8, 10, 399, 803, 804, 805, 806, 807, 808, 814, 899},
-    '2018-12-11'),
-KTuple('nep095.bsp',
-    '1900-01-01T00:00:09', '2050-01-01T00:00:00',
-    {3, 8, 10, 399, 801, 802, 803, 804, 805, 806, 807, 808, 814, 899},
-    '2020-08-04'),
-KTuple('nep097xl-801.bsp',
-    -441797371200.0, 473354280000.0,
-    {801},
-    '2022-03-24'),
-KTuple('nep097xl-899.bsp',
-    -441797371200.0, 473354280000.0,
-    {899},
-    '2022-03-24'),
-KTuple('nep097.bsp',
-    '1600-01-09T23:59:27.816', '2399-12-30T23:58:50.816',
-    {3, 8, 10, 399, 801, 899},
-    '2022-03-24'),
-KTuple('nep101xl-802.bsp',
-    -473353848000.0, 473355144000.0,
-    {802},
-    '2022-03-24'),
-KTuple('nep101xl.bsp',
-    -473353848000.0, 473355144000.0,
-    {809, 810, 811, 812, 813},
-    '2022-03-25'),
-KTuple('nep101.bsp',
-    '1600-01-09T23:59:27.816', '2399-12-30T23:58:50.816',
-    {3, 8, 10, 399, 802, 809, 810, 811, 812, 813, 899},
-    '2022-03-24'),
-KTuple('nep102.bsp',
-    '1600-01-01T23:59:27.816', '2399-12-30T23:58:50.816',
-    {3, 8, 10, 399, 809, 810, 811, 812, 813, 899},
-    '2022-03-24'),
-]
+    FRAME_IDS[body_name] = frame_id
+    FRAME_CENTERS[frame_id] = body_id
 
-spk = make_func('spk', pattern=r'nep(\d\d\d).*\.bsp', fnmatch='nep*.bsp',
-                       info=SPK_INFO, extras=[], exclusive=False, bodies=ALL_MOONS | {ID})
+del body_id, body_name, frame_id, frame_name, found
+
+##########################################################################################
+# SPKs
+##########################################################################################
+
+from ._NEPTUNE_SPKS import _NEPTUNE_SPKS
+
+spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
+
+rule = Rule(r'nep(NNN).*\.bsp', source=spk_source, dest='Neptune/SPK', planet=NAME,
+            family='Neptune-SPK')
+
+default_body_ids = {False: SYSTEM, True: ALL_IDS}
+
+spk_docstrings = {'irregular': """\
+        irregular   True to include Neptune's irregular satellites in the returned Kernel
+                    object. Otherwise, unless a list of NAIF IDs is explicitly provided,
+                    the returned Kernel will only cover Neptune's inner satellites.
+"""}
+
+spk = spicefunc('spk', title='Neptune satellite SPK',
+                known=_NEPTUNE_SPKS,
+                unknown=rule.pattern, source=spk_source,
+                sort=_spk_sort_key,
+                exclude=False, reduce=True,
+                default_ids=default_body_ids, default_ids_key=('irregular',),
+                docstrings=spk_docstrings)
+
+del spk_source, rule, default_body_ids, spk_docstrings
+del spicefunc, _SOURCE, _spk_sort_key
 
 ##########################################################################################

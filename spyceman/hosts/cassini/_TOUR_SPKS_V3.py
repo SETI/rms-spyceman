@@ -1,8 +1,10 @@
 ##########################################################################################
-# hosts/cassini/_SPK_RECONSTRUCTED_V3.py
+# spyceman/hosts/Cassini/_TOUR_SPKS_V3.py
 ##########################################################################################
 
-_SPK_RECONSTRUCTED_V3 = [
+from spyceman import KTuple
+
+_TOUR_SPKS_V3 = [
 
 KTuple('200128RU_SCPSE_04036_04182.bsp',
     '2004-02-05T23:58:55.815', '2004-06-30T17:58:56.816',

@@ -5,6 +5,7 @@
 """
 
 import os
+import pathlib
 import warnings
 import zlib
 
@@ -18,7 +19,7 @@ _INITIALIZED = False    # True if initialize() has been called
 _WARNED = False         # True if a warning has been issued
 
 
-def initialize(option='ignore'):
+def initialize(option='warn'):
     """Walk the list of directories defined by environment variable "SPICEPATH".
 
     Input:
@@ -33,11 +34,12 @@ def initialize(option='ignore'):
     if _INITIALIZED:
         return
 
+    _INITIALIZED = True
+
     if 'SPICEPATH' in os.environ:
         roots = ':'.split(os.environ['SPICEPATH'])
         for root in roots:
-            KernelFile.walk(root)
-        _INITIALIZED = True
+            _localfiles.walk(root)
 
     elif option == 'ignore':
         return
@@ -50,6 +52,7 @@ def initialize(option='ignore'):
                 _WARNED = True
         else:
             raise RuntimeError(message)
+
 
 def walk(*directories, translator=None, override=False):
     """Walk one or more directory trees and update the global dictionary of SPICE
@@ -67,16 +70,17 @@ def walk(*directories, translator=None, override=False):
     """
 
     for directory in directories:
-        directory = os.path.abspath(os.path.realpath(directory))
-        if directory in _ROOTS:
+        directory = pathlib.Path(directory)
+        resolved = directory.resolve()
+        if resolved in _ROOTS:
             continue
 
-        for root, dirs, basenames in os.walk(directory, followlinks=True):
+        for root, dirs, basenames in directory.walk(follow_symlinks=True):
             for basename in basenames:
-                path = os.path.join(root, basename)
+                path = root / basename
                 use_paths(path, translator=translator, override=override, ignore=True)
 
-        _ROOTS.add(directory)
+        _ROOTS.add(resolved)
 
 
 def use_path(path, newname=None, override=False, ignore=False):
@@ -95,13 +99,13 @@ def use_path(path, newname=None, override=False, ignore=False):
     silently; otherwise, a ValueError is raised.
     """
 
-    if not os.path.exists(path):
-        raise FileNotFoundError('SPICE file not found: ' + repr(path))
+    path = pathlib.Path(path)
 
-    abspath = os.path.abspath(os.path.realpath(path))
+    if not path.exists():
+        raise FileNotFoundError(f'SPICE file path not found: "{path}"')
 
     if newname is None:
-        basename = os.path.split(abspath)[-1]
+        basename = path.name
     else:
         basename = newname
 
@@ -110,9 +114,10 @@ def use_path(path, newname=None, override=False, ignore=False):
     if ext not in _EXTENSIONS:
         if ignore:
             return
-        raise ValueError('unrecognized SPICE kernel file extension: ' + path)
+        raise ValueError(f'unrecognized SPICE kernel file extension: "{basename}"')
 
     # Check for a duplicated basename with different content
+    abspath = str(path.resolve())
     if basename in _KernelInfo.ABSPATHS:
         old_abspath = _KernelInfo.ABSPATHS[basename]
         if old_abspath == abspath:
@@ -140,8 +145,19 @@ def use_path(path, newname=None, override=False, ignore=False):
         return
 
     # Check a .txt file to see if it's a metakernel
-    if ext == '.txt' and not ignore and not _is_metakernel(abspath):
-        raise ValueError('not a SPICE kernel file: ' + path)
+    if ext == '.txt' and not _is_metakernel(abspath):
+
+        # It's possible to create a ".txt" _KernelInfo object before it exists. If we now
+        # know it's not actually a metakernel, remove it!
+        defined = basename in _KernelInfo.KERNELINFO
+        if defined:
+            del _KernelInfo.KERNELINFO[basename]
+            _KernelInfo.BASENAMES_BY_KTYPE['META'].remove(basename)
+
+        if ignore and not defined:
+            return
+
+        raise ValueError(f'not a SPICE kernel file: "{path}"')
 
     # Any other file with a valid extension is a kernel
     ktype = _EXTENSIONS[ext]
@@ -167,24 +183,26 @@ def use_paths(*paths, translator=None, override=False, ignore=False):
     """
 
     for path in paths:
-        abspath = os.path.abspath(path)
+        path = pathlib.Path(path)
+        basename = None
 
         # Apply translator if any
-        (root, basename) = os.path.split(abspath)
         if translator:
-            test = translator(root, basename)
+            test = translator(path.parent, path.name)
             if test:
                 basename = test
 
-        use_path(abspath, newname=basename, override=override, ignore=ignore)
+        use_path(path, newname=basename, override=override, ignore=ignore)
 
 
 def _file_checksum(filepath):
     """Adler 32 checksum of a file."""
 
+    filepath = pathlib.Path(filepath)
+
     BLOCKSIZE = 65536
     value = 0
-    with open(filepath, 'rb') as f:
+    with filepath.open('rb') as f:
         buffer = f.read(BLOCKSIZE)
         while buffer:
             value = zlib.adler32(buffer, value)
@@ -205,7 +223,9 @@ def _is_metakernel(filepath):
     """True if this file is a metakernel."""
 
     is_metakernel = False
-    with open(filepath, 'r', encoding='latin8') as f:
+
+    filepath = pathlib.Path(filepath)
+    with filepath.open('r', encoding='latin8') as f:
         for rec in f:
             if 'KERNELS_TO_LOAD' in rec.upper():
                 is_metakernel = True

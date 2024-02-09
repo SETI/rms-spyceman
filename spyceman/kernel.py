@@ -11,6 +11,7 @@ import re
 from spyceman._cspyce     import CSPYCE
 from spyceman._kernelinfo import _KernelInfo
 from spyceman._ktypes     import _KTYPES
+from spyceman._utils      import is_basename, basename_ktype
 
 # Dictionary ktype -> ordered list of basenames currently furnished in cspyce
 _FURNISHED_BASENAMES = {key:{} for key in _KTYPES}
@@ -104,7 +105,48 @@ class Kernel(object):
         if not isinstance(kernel, str):
             raise TypeError('not a Kernel object: ' + repr(kernel))
 
-        return Kernel.KernelFile(kernel)
+        return Kernel.KernelFile(kernel, download=True)
+
+    ######################################################################################
+    # Global operating modes
+    ######################################################################################
+
+    _DOWNLOADS = True
+    _DEBUG = False
+    _VERBOSE = False
+
+    @staticmethod
+    def download(status=None):
+        """Set and/or return the download status."""
+
+        if status is None:
+            status = Kernel._DOWNLOADS
+
+        status = bool(status)
+        Kernel._DOWNLOADS = status
+        return status
+
+    @staticmethod
+    def debug(status=None):
+        """Set and/or return the debug status."""
+
+        if status is None:
+            status = Kernel._DEBUG
+
+        status = bool(status)
+        Kernel._DEBUG = status
+        return status
+
+    @staticmethod
+    def verbose(status=None):
+        """Set and/or return the verbose status."""
+
+        if status is None:
+            status = Kernel._VERBOSE
+
+        status = bool(status)
+        Kernel._VERBOSE = status
+        return status
 
     ######################################################################################
     # Standard properties, overridden where necessary
@@ -149,8 +191,8 @@ class Kernel(object):
 
     @property
     def naif_ids(self):
-        """The set of NAIF IDs covered by this file, including aliases; {} if the kernel
-        applies to all NAIF IDs.
+        """The set of NAIF IDs covered by this file, including aliases; an empty set if
+        the kernel applies to all NAIF IDs.
         """
 
         if not hasattr(self, '_naif_ids') or self._naif_ids is None:
@@ -161,8 +203,8 @@ class Kernel(object):
 
     @property
     def naif_ids_wo_aliases(self):
-        """The set of NAIF IDs covered by this file, without aliases; {} if the kernel
-        applies to all NAIF IDs.
+        """The set of NAIF IDs covered by this file, without aliases; an empty set if the
+        kernel applies to all NAIF IDs.
         """
 
         if not hasattr(self, '_naif_ids_wo_aliases') or self._naif_ids_wo_aliases is None:
@@ -326,7 +368,7 @@ class Kernel(object):
             if isinstance(kernel, str):
 
                 # kernel is a basename
-                if _KernelInfo.is_basename(kernel):
+                if is_basename(kernel):
                     basenames = {kernel}
                     kfile = Kernel.KernelFile(kernel, exists=True)
                     kernel_ktype = kfile.ktype
@@ -334,7 +376,7 @@ class Kernel(object):
                 # kernel is a regular expression
                 else:
                     basenames = set(_KernelInfo.match(kernel))
-                    kernel_ktype = _KernelInfo.basename_ktype(kernel)
+                    kernel_ktype = basename_ktype(kernel)
                         # blank if the ktype cannot be inferred from the pattern
 
                 basenames -= set(self.basenames)
@@ -363,17 +405,58 @@ class Kernel(object):
                     diff_ktype_set.add(kernel)
 
     ######################################################################################
+    # Superseders
+    ######################################################################################
+
+    def add_superseder(self, above, *below, flags=re.IGNORECASE):
+        """When furnishing this kernel, ensure that a file matching the first basename
+        pattern will be furnished at a higher level of precedence than any basenames
+        matching subsequent patterns.
+
+        Multiple "above" patterns can be specified inside a tuple, list, or set. If this
+        input contains capturing sequences, these can be referenced in the "below"
+        patterns.
+        """
+
+        if not hasattr(self, '_superseders'):
+            self._superseders = []
+
+        above = Kernel.KernelFile._compile(above, flags=flags)
+        below = Kernel.KernelFile._compile(below, flags=flags)
+            # Each is a list of patterns
+
+        for pattern in above:
+            self._superseders.append([pattern] + below)
+
+    def add_superseders(self, tuples, flags=re.IGNORECASE):
+        """Add a list of superseder tuples to this kernel."""
+
+        for above_below in tuples:
+            self.add_superseder(*above_below, flags=re.IGNORECASE)
+
+    def get_superseders(self, basename):
+        """The list of compiled regular expressions that this basename supersedes."""
+
+        if hasattr(self, '_superseders'):
+            sources = self._superseders + Kernel.KernelFile._SUPERSEDERS
+        else:
+            sources = Kernel.KernelFile._SUPERSEDERS
+
+        return Kernel.KernelFile._get_vetos_or_superseders(basename, sources)
+
+    ######################################################################################
     # Furnished kernel management
     ######################################################################################
 
-    def furnish(self, tmin=None, tmax=None, ids=None, minloc=0):
+    def furnish(self, tmin=None, tmax=None, ids=None, *, minloc=0, refloc=None,
+                reason=''):
         """Furnish this Kernel object at highest precedence for the specified range of
         times and the specified set of NAIF IDs.
 
-        This method returns the index of the highest-precedence kernel
+        This method returns the index of the highest-precedence kernel.
 
         Overlapping, excluded kernels are unloaded. Pre-, post-, and co-requisites are
-        also furnished as needed.
+        furnished as needed.
 
         Input:
             tmin        lower time limit in seconds TDB; None for all times.
@@ -382,40 +465,54 @@ class Kernel(object):
             minloc      optional specification of an index such that every basename to be
                         furnished will be at or above this index in the list of furnished
                         kernels.
+            refloc      optional specification of a particular location in the list of
+                        furnished files. If not None, the function will return the updated
+                        location as a second element of a tuple. The refloc might change
+                        if files lower in precedence than this value are unloaded during
+                        the operation.
+            reason      reason for the furnish: "prerequisite", "post-requisite",
+                        "corequisite", or blank for default.
 
-        Return:         the index of the basename of the highest furnished basename.
+        Return:         loc or (loc, refloc)
+            loc         the index of the basename of the highest furnished basename.
+            refloc      the new index of the given refloc in the list of furnished
+                        basenames.
         """
 
-        # Unload any excluded kernels
+        # Unload any excluded kernels; track minloc
         for kernel in self.exclusions:
             kernel = Kernel.as_kernel(kernel)
-            refloc = kernel.unload(tmin=tmin, tmax=tmax, ids=ids, refloc=minloc)
+            minloc = kernel.unload(tmin=tmin, tmax=tmax, ids=ids, refloc=minloc,
+                                   reason='exclusion')
 
-        # Furnish any co-requisites
-        for kernel in self.corequisites:
-            kernel = Kernel.as_kernel(kernel)
-            _ = kernel._furnish_for(tmin=tmin, tmax=tmax, ids=ids)
-
-        # Furnish any prerequisites; identify highest index among the furnished basenames
-        maxloc = -1
+        # Furnish any prerequisites; identify highest loc among the furnished basenames
         for kernel in self.prerequisites:
             kernel = Kernel.as_kernel(kernel)
-            loc = kernel._furnish_for(tmin=tmin, tmax=tmax, ids=ids)
-            maxloc = max(maxloc, loc)
-        # maxloc = maximum index among prerequisites
+            loc, minloc = kernel.furnish(tmin=tmin, tmax=tmax, ids=ids,
+                                         minloc=0, refloc=minloc, reason='prerequisite')
+            minloc = max(minloc, loc)
 
-        # Furnish this kernel above any prerequisites and above refloc
-        minloc = max(refloc, minloc)
-        maxloc = kernel._furnish_for(tmin=tmin, tmax=tmax, ids=ids, minloc=minloc)
+        # Furnish this kernel above any prerequisites
+        maxloc = kernel._furnish_for(tmin=tmin, tmax=tmax, ids=ids, minloc=minloc,
+                                     reason=reason)
 
         # Furnish any post-requisites above this kernel
         for kernel in self.postrequisites:
             kernel = Kernel.as_kernel(kernel)
-            _ = kernel._furnish_for(tmin=tmin, tmax=tmax, ids=ids, minloc=maxloc)
+            _, maxloc = kernel.furnish(tmin=tmin, tmax=tmax, ids=ids,
+                                       minloc=maxloc, refloc=maxloc,
+                                       reason='post-requisite')
+
+        # Furnish any co-requisites
+        for kernel in self.corequisites:
+            kernel = Kernel.as_kernel(kernel)
+            kernel.furnish(tmin=tmin, tmax=tmax, ids=ids,
+                           reason='corequisite')
 
         return maxloc
 
-    def _furnish_for(self, tmin=None, tmax=None, ids=None, minloc=0):
+    def _furnish_for(self, tmin=None, tmax=None, ids=None, minloc=0, refloc=None,
+                     reason=''):
         """Internal method to furnish this kernel, ensuring that every furnished basename
         is at or above a specified location in the list.
         """
@@ -424,30 +521,75 @@ class Kernel(object):
 
         maxloc = minloc
         for basename in self.basenames:
-            kfile = Kernel.KernelFile(basename, exists=True)
+            kfile = Kernel.KernelFile(basename)
+
+            # Ignore files that do not overlap
             if not kfile.has_overlap(tmin=tmin, tmax=tmax, ids=ids):
                 continue
 
-            abspath = kfile.abspath
-            if not abspath:
-                raise FileNotFoundError('kernel file not found: ' + repr(basename))
+            # Require an overlapping file to exist
+            kfile.must_exist()
 
-            # See if kernel file is already furnished
+            # Identify locations of vetoed files
+            patterns = Kernel.KernelFile._get_vetos(basename)
+            locs = []
+            for pattern in patterns:
+                locs += [loc for loc, name in enumerate(furnished)
+                         if pattern.fullmatch(name)]
+
+            # Unload vetoed files; update minloc and maxloc
+            locs = list(set(locs))      # select unique locs
+            locs.sort(reverse=True)     # reverse order!
+            for loc in locs:
+                unload = Kernel.KernelFile(furnished[loc])
+                if not unload.has_overlap(tmin=tmin, tmax=tmax, ids=ids):
+                    continue
+
+                furnished.pop(loc)
+                if not Kernel._DEBUG:
+                    CSPYCE.unload(unload.abspath)
+                if Kernel._VERBOSE:
+                    print('Spyceman:', unload.basename, 'unloaded (veto)')
+
+                if loc <= minloc:
+                    minloc -= 1
+                if loc <= maxloc:
+                    maxloc -= 1
+                if refloc and loc <= refloc:
+                    refloc -= 1
+
+            # See if the kernel file is already furnished
             try:
                 loc = furnished.index(basename)
 
             # If not, furnish it
             except ValueError:
-                _CSPYCE.furnsh(abspath)
                 furnished.append(basename)
                 loc = len(furnished) - 1
 
+                if not Kernel._DEBUG:
+                    CSPYCE.furnsh(kfile.abspath)
+                if Kernel._VERBOSE:
+                    reason = reason or 'request'
+                    print('Spyceman:', kfile.basename, f'furnished ({reason})')
+
             # Otherwise...
             else:
-                # ...if its precedence is too low, unload and furnish again
-                if loc < minloc:
-                    _CSPYCE.unload(abspath)
-                    _CSPYCE.furnsh(abspath)
+                # Locate any superseded files
+                patterns = self.get_superseders(basename)
+                locs = [minloc]
+                for pattern in patterns:
+                    locs += [k for k,f in enumerate(furnished) if pattern.fullmatch(f)]
+
+                # If this file's precedence is too low, unload and furnish again
+                if loc < max(locs):
+                    if not Kernel._DEBUG:
+                        CSPYCE.unload(kfile.abspath)
+                        CSPYCE.furnsh(kfile.abspath)
+                    if Kernel._VERBOSE:
+                        reason = reason or 'request'
+                        print('Spyceman:', kfile.basename, 'reloaded ({reason})')
+
                     furnished.pop(loc)
                     furnished.append(basename)
                     loc = len(furnished) - 1
@@ -460,19 +602,23 @@ class Kernel(object):
             # Track the maximum index among the kernel files being furnished
             maxloc = max(maxloc, loc)
 
-        return maxloc
+        if refloc is None:
+            return maxloc
 
-    def unload(self, tmin=None, tmax=None, ids=None, refloc=0):
+        return (maxloc, refloc)
+
+    def unload(self, tmin=None, tmax=None, ids=None, refloc=0, reason=''):
         """Unload any basename of this kernel that overlaps the time range or kernel list.
 
         Input:
             tmin        lower time limit in seconds TDB; None for all times.
             tmax        upper time limit in seconds TDB; None for all times.
             ids         NAIF ID or set of NAIF IDs.
-            loc         optional reference index into the list of furnished kernels.
+            refloc      optional reference index into the list of furnished kernels.
+            reason      reason for unload; blank for default. Used in verbose mode.
 
-        Return          new location of the given index. The value will change for each
-                        basename below this location that is unloaded.
+        Return          new location of the given refloc value. The value will change for
+                        each basename below this location that is unloaded.
         """
 
         furnished = _FURNISHED_BASENAMES[self.ktype]
@@ -488,7 +634,12 @@ class Kernel(object):
                 except KeyError:
                     continue
 
-                _CSPYCE.unload(kfile.abspath)
+                if not Kernel._DEBUG:
+                    CSPYCE.unload(kfile.abspath)
+                if Kernel.VERBOSE:
+                    reason = reason or 'request'
+                    print('Spyceman:', kfile.basename, f'unloaded ({reason})')
+
                 furnished.pop(loc)
                 if loc <= refloc:
                     refloc -= 1
@@ -552,7 +703,7 @@ class Kernel(object):
                         Kernel.DT.
         """
 
-        if Kernel.is_basename(tmin):
+        if is_basename(tmin):
             tmin = Kernel.as_kernel(tmin)
 
         if isinstance(tmin, Kernel):
@@ -708,51 +859,55 @@ class Kernel(object):
     def _release_date_for_kernels(kernels):
         """The lastest release date among these kernels."""
 
-        release_date = ''
-        for kernel in kernels:
-            release_date = max(release_date, Kernel.as_kernel(kernel).release_date)
+        return max(Kernel.as_kernel(k).release_date for k in kernels)
 
-        return release_date
+    @staticmethod
+    def _family_for_kernels(kernels):
+        """A reasonable family name for a set of kernels."""
+
+        families = {Kernel.as_kernel(k).family for k in kernels}
+        return Kernel._common_name(families)
+
+    @staticmethod
+    def _name_for_kernels(kernels):
+        """A reasonable name for a set of kernels."""
+
+        names = {Kernel.as_kernel(k).name for k in kernels}
+        return Kernel._common_name(names)
 
     @staticmethod
     def _version_for_kernels(kernels):
-        """The highest version ID among these kernels.
+        """The overall version ID or set of version IDs among these kernels.
 
-        Kernels without version IDs are ignored. If no kernels have version IDs, an empty
-        string is returned. Integer and tuple versions are compared by converting the
-        integer to a single-element tuple. Strings can only be compared to strings.
+        This is the maximum among the versions of the kernels provided. If the versions
+        are a mixture of strings and integers/tuples, the set of both maxima is returned.
         """
 
-        # String and integer versions are incompatible, so track them separately.
-        # However, tuple and integer versions can be merged.
-        version_strings = []
-        version_tuples = []
-        for kernel in kernels:
-            version = Kernel.as_kernel(kernel).version
+        versions = set()
+        for k in kernels:
+            versions |= k.version_as_set
 
-            if version == '':       # this means the kernel has no identified version ID
-                continue
-
-            if isinstance(version, str):
-                version_strings.append(version)
-            elif isinstance(version, numbers.Integral):
-                version_tuples.append((int(version),))      # int -> (int,)
-            else:
-                version_tuples.append(version)
-
-        if version_tuples and version_strings:
+        if not versions:
             return ''
 
-        if version_tuples:
-            version = max(version_tuples)
-            if len(version) == 1:                           # (int,) -> int
-                return version[0]
-            return version
+        versions = {(v,) if isinstance(v, numbers.Integral) else v for v in versions}
+        tuples = {v for v in versions if isinstance(v, tuple)}
+        strings = {v for v in versions if isinstance(v, str)}
 
-        if version_strings:
-            return max(version_strings)
+        versions = []
+        if tuples:
+            max_tuples = max(tuples)
+            if len(max_tuples) == 1:        # convert tuple to int
+                max_tuples = max_tuples[0]
+            versions.append(max_tuples)
 
-        return ''
+        if strings:
+            versions.append(max(strings))
+
+        if len(versions) == 1:
+            return versions[0]
+
+        return set(versions)
 
     @staticmethod
     def _properties_for_kernels(kernels):
@@ -762,94 +917,101 @@ class Kernel(object):
         for kernel in kernels:
             properties = Kernel.as_kernel(kernel).properties
             for name, value in properties.items():
-                if name in merged:
-                    if merged[name] != value:   # delete a property with multiple values
-                        del merged[name]
+                if name not in merged:
+                    merged[name] = set()
+                if not value and value != 0:
+                    continue
+                if isinstance(value, set):
+                    merged[name] |= value
                 else:
-                    merged[name] = value
+                    merged[name].add(value)
+
+        for name, valset in merged.items():
+            if not valset:
+                del merged[name]
+            elif len(valset) == 1:
+                merged[name] = valset.pop()
 
         return merged
 
-    _DIGITS = re.compile(r'(\d+)')
-
     @staticmethod
-    def _common_name(basenames):
-        """A reasonably specific file match pattern that describes all of the basenames
-        or family names provided, except that "#" replaces individual digits 0-9 rather
-        than "?".
+    def _common_name(names, maxlen=0):
+        """A reasonable summary name for a list of names.
+
+        If maxlen is nonzero, it is the approximate maximum length of the name returned.
         """
 
-        # If all the families are the same, use the family string
-        if all(basenames[0] == b for b in basenames[1:]):
-            return basenames[0]
+        names = set(names)
+        if len(names) == 1:
+            return names.pop()
 
-        # Extract the common extension
-        parts = [b.rpartition('.') for b in basenames]
-        exts = [p[2] for p in parts]
-        ext = '.' + Kernel._common_pattern(exts)
+        # Find common characters from beginning
+        head = []
+        while True:
+            chars = {n[0] if n else '' for n in names}
+            if len(chars) == 1:
+                char = chars.pop()
+                if not char:
+                    break
+                head.append(char)
+            elif chars.issubset(set('0123456789')):     # try replacing digits with "N"
+                head.append('N')
+            else:
+                break
 
-        # Set the file extension aside
-        basenames = [p[0] for p in parts]
+            names = {n[1:] if n else '' for n in names}
 
-        # Split into sections separated by sequences of digits
-        splits = [Kernel._DIGITS.split(b) for b in basenames]
-        lengths = [len(s) for s in splits]
-        min_splits = min(lengths)
-        max_splits = max(lengths)
+        head = ''.join(head)
 
-        # Find a common match pattern for each section
-        patterns = []
-        for k in range(min_splits):
-            substrings = [s[k] for s in splits]
-            pattern = Kernel._common_pattern(substrings)
+        # Find common characters from end
+        tail = []
+        while True:
+            chars = {n[-1] if n else '' for n in names}
+            if len(chars) == 1:
+                char = chars.pop()
+                if not char:
+                    break
+                tail.append(char)
+            elif chars.issubset(set('0123456789')):     # try replacing digits with "N"
+                tail.append('N')
+            else:
+                break
 
-            # Do some minor cleanup of numeric sections
-            if k%2 == 1:
-                # Fixed digit between two variable digits
-                pattern = re.sub(r'#\d#', '###', pattern)
+            names = {n[:-1] if n else '' for n in names}
 
-                # Fixed digit after two or more variable digits
-                pattern = re.sub(r'##\d(?!\d)', '###', pattern)
+        tail = ''.join(tail[::-1])
 
-            patterns.append(pattern)
+        # Find the shortest way to express the "innards" upon splitting by underscores
+        names = list(names)
+        names.sort()
+        innard_options = ['[' + '|'.join(names) + ']']
 
-        # Append an asterisk if necessary
-        if min_splits != max_splits and not pattern[-1].endswith('*'):
-            patterns.append('*')
+        before = ''
+        while True:
+            words = {n.partition('_')[0] for n in names}
+            if len(words) == 1:
+                innard = words.pop() + '_'
+            else:
+                words = list(words)
+                words.sort()
+                if all(len(w) < 2 for w in words):
+                    innard = '[' + ''.join(words) + ']_'
+                else:
+                    innard = '[' + '|'.join(words) + ']_'
 
-        return ''.join(patterns) + ext
+            names = {n.partition('_')[-1] for n in names}
+            if names == {''}:
+                break
 
-    @staticmethod
-    def _common_pattern(strings):
-        """Internal, recursive function to return a minimal fnmatch pattern that matches
-        every given string.
+            names = list(names)
+            names.sort()
+            before += innard
+            innard_options.append(before + '[' + '|'.join(names) + ']')
 
-        However, single digits are replaced by "#" rather than "?".
-        """
+        minlen = min(len(i) for i in innard_options)
+        innard = [i for i in innard_options if len(i) == minlen][0]
 
-        zero_lengths = [len(s) == 0 for s in strings]
-        if all(zero_lengths):
-            return ''
-
-        if any(zero_lengths):
-            return '*'
-
-        firsts = list({s[0] for s in strings})
-        if len(firsts) == 1:
-            return firsts[0] + Kernel._common_pattern([s[1:] for s in strings])
-
-        lasts = list({s[-1] for s in strings})
-        if len(lasts) == 1:
-            return Kernel._common_pattern([s[:-1] for s in strings]) + lasts[0]
-
-        if len(firsts) == 2:
-            firsts.sort()
-            return ('[' + ''.join(firsts) + ']'
-                    + Kernel._common_pattern([s[1:] for s in strings]))
-
-        if all(f >= '0' and f <= '9' for f in firsts):
-            return '#' + Kernel._common_pattern([s[1:] for s in strings])
-
-        return '?' + Kernel._common_pattern([s[1:] for s in strings])
+        # Merge results
+        return head + innard + tail
 
 ##########################################################################################

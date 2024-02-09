@@ -13,22 +13,14 @@ class KernelSet(Kernel):
     together.
     """
 
-    def __init__(self, basenames, *, ordered=False, reduce=False, ids=None,
-                       name=None):
+    def __init__(self, basenames, *, ordered=False, name=None):
         """Constructor.
 
         Inputs:
-            basenames   list of kernel file basenames to be included.
+            basenames   list of kernel file basenames or KernelFiles to be included.
             ordered     True to ensure that the load order among the basenames is
                         preserved; False to allow the basenames within this KernelSet to
                         be loaded in any order.
-            reduce      If True, only a reduced subset of the kernel files will be used.
-                        The reduced subset excludes any kernel files earlier in the list,
-                        whose content is completely covered by later kernels. If False,
-                        every kernel file will be used.
-            ids         an optional set of NAIF IDs to use if reduce is True. Only IDs in
-                        this set will be considered when determining which kernel files to
-                        exclude.
             name        optional name string for this Kernel. If not provided, a name
                         will be derived from the basenames and their family names. This
                         string is entirely for user convenience and need not be unique.
@@ -41,6 +33,9 @@ class KernelSet(Kernel):
         # Select unique basenames, prioritizing last occurrence
         self._basenames = []
         for basename in basenames:
+            if isinstance(basename, KernelFile):
+                basename = KernelFile._basename
+
             if KernelFile(basename).ktype != self._ktype:
                 raise ValueError('KernelSets can only contain a single ktype')
 
@@ -52,12 +47,6 @@ class KernelSet(Kernel):
                 self._basenames.pop(loc)
 
             self._basenames.append(basename)
-
-        # If reduced, we can proceed by eliminating any kernel file that will never be
-        # needed.
-        if reduce and ordered:
-            self._basenames = KernelFile.filter_basenames(self._basenames, ids=ids,
-                                                          reduce=True)
 
         self._is_ordered = bool(ordered)
         self._name = str(name)

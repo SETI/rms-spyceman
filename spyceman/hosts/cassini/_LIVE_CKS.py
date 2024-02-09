@@ -1,10 +1,10 @@
 ##########################################################################################
-# hosts/cassini/ck_v1_live.py
+# spyceman/hosts/cassini/_LIVE_CKS.py
 ##########################################################################################
 
-from spyceman import make_func
+from spyceman import KTuple
 
-basenames = [
+_LIVE_CKS = [
     '04009_04051px.bc',
     '04051_04092ph_psiv2.bc',
     '04092_04135ph_fsiv.bc',
@@ -110,27 +110,5 @@ basenames = [
     '17145_17191ph_as_flown.bc',
     '17191_17258pf_as_flown.bc',
 ]
-
-# This rule defines the version as "pa", "pb", etc. for any file version through "px" and
-# makes the family name consistent. However, it will not match "...pa_gapfill".
-CK_V1_PATTERN = r'[01]\d[0-3]\d\d_[01]\d[0-3]\d\d(p[a-x])_[^g].*\.bc'
-
-_ = VersionRule(CK_V1_PATTERN, family='YYDOY_YYDOYpX_live.bc')
-
-notes = """\
-        This function returns a KernelSet containing "live" CKs that were generated as a
-        part of Cassini mission planning.
-
-        Versions of individual kernel files are identified by a two-letter code "pa"
-        through "px".
-
-"""
-
-properties={'mission': 'Cassini', 'planet': 'Saturn', 'version': 1}
-
-ck_v1_live = make_func('ck_v1_live', pattern=CK_V1_PATTERN, title='Saturn "live" CKs'
-                       exclusive=False, ordered=False, reduce=True,
-                       basenames=basenames, use_others=True, missing='warn',
-                       properties=properties)
 
 ##########################################################################################

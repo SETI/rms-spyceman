@@ -12,7 +12,7 @@ class KernelStack(Kernel):
 
     _is_ordered = True      # fixed value for every instance of this subclass
 
-    def __init__(self, kernels, name=''):
+    def __init__(self, kernels, *, name=''):
         """Constructor.
 
         Inputs:

@@ -2,165 +2,294 @@
 # spyceman/spicefunc.py
 ##########################################################################################
 
-import re
-
-from spyceman.kernelfile import KernelFile
+from spyceman.kernel     import Kernel
+from spyceman.kernelfile import KernelFile, KTuple
 from spyceman.kernelset  import KernelSet
-
-# This function executes once, the first time the function() is called.
-# Note that it makes use of attributes attached to the function itself.
+from spyceman._utils     import _input_set, _input_list
 
 DOCSTRING_TEMPLATE = """\
-    A Kernel object composed of one or more {TITLE} files selected based on
-    name, time range, release date, or other properties.
+    A Kernel object composed of one or more {TITLE} files selected based
+    on name, time range, release date, or other properties.
 
 {NOTES}
     Inputs:
-        key         select one or more {TITLE} files by name, family, or version number.
-                    - "local" for all kernel files;
-                    - a version number to restrict the kernel selection to files with
-                      that version identification;
-                    - the name of a single Kernel object or basename;
-                    - a regular expression used to filter the available basenames and
-                      return a new KernelSet;
-                    - a tuple of one or more of the above.
 {PROPERTIES}\
-        tmin, tmax  only include Kernels with times overlapping this time interval,
-                    specified in TDB seconds or date strings.
-        ids         only include Kernels that refer to one or more of these NAIF IDs.
-        dates       only include kernel files released within this range of dates. Use a
-                    a tuple of two date strings defining the earliest and latest dates to
-                    include. Replace either date value with None or an empty string to
-                    ignore that constraint. A single date is treated as the upper limit on
-                    the release date.
-        versions    only include kernel files within this range of versions. Use a tuple
-                    of two version numbers defining the minimum and maximum (inclusive) to
-                    be included. Replace either value with None to ignore that constraint.
-                    A single version number is treated as the upper limit.
-        expand      if True, the returned list of basenames is expanded if necessary to
-                    ensure that all of the specified NAIF IDs are covered for the entire
-                    time range tmin to tmax. In this case, some constraints on the name,
-                    release date, and version might be violated.
-        download    if True and the source of the file is known, download a missing file
-                    while issuing a warning; otherwise, raise a FileNotFoundError.
+        tmin, tmax  only include kernel files with times overlapping this time interval.
+                    Express times using a UTC date-time string or in TDB seconds.
+        ids         only include kernel files that overlap with this NAIF ID or
+                    set/list/tuple of NAIF IDs.
+        basename    only include kernel files that match this basename or regular
+                    expression. Specify multiple values in a list, set, or tuple. Note:
+                    in this context, a string containing only only letters, numbers,
+                    underscore, dash ("-") and dot(".") is treated as a literal basename
+                    rather than as a match pattern.
+        version     only include kernel files that match this version. Use a set to
+                    specify multiple acceptable versions. Use a list of two values to
+                    specify the minimum and a maximum (inclusive) of acceptable range;
+                    in this case, either value can be None to enforce a minimum or a
+                    maximum version but not both.
+        release_date only include kernel files consistent with this release date. Use a
+                    list or tuple of two date strings defining the earliest and latest
+                    dates to include. Replace either date value with None or an empty
+                    string to ignore that constraint. A single date is treated as the
+                    upper limit on the release date.
+        expand      if True, the list of kernel files is expanded if necessary to ensure
+                    that the entire time range is covered for all of the specified NAIF
+                    IDs. In this case, some constraints on name, version, and release date
+                    might be violated.
+        renew       True to check online sources for new versions of kernel files.
+
+    Note: If no available kernel files overlap the specified time range or set of NAIF
+    IDs, this function returns None.
 """
 
-# This is the template for a kernel-generator function. It allows the same function to be
-# used for LSKs, PCKs, DE SPKs, Mars, Jupiter, etc. It is "wrapped" by the function below,
-# make_func, so that each version of the function has its own attributes defining PATTERN,
-# INFO, EXTRAS, etc.
+def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, version=None,
+                  release_date=None, expand=False, renew=False, **properties):
 
-def func_template(func, name, version, *, tmin=None, tmax=None, ids=None, dates=None,
-                        versions=None, expand=False, download=True, **properties):
+    # Internal functions...
 
-    # Make sure everything is initialized
-    if not func.INITIALIZED:
-        _initialize(func)
+    def property_keys(keynames, defaults):
+        """The set of dictionary keys compatible with user inputs."""
 
-    # Use "latest" if all inputs are defaults
-    if (all(x is None for x in (name, tmin, tmax, ids, dates, versions))
-        and all(v is None for v in properties.values())):
-            name = 'latest'
+        keys = set(defaults.keys())
+        for i, name in enumerate(keynames):
+            value = properties[name]
+            valset = _input_set(value)
+            if not valset:
+                continue
+            if len(keynames) == 1:
+                keys = {k for k in keys if k in valset}
+            else:
+                keys = {k for k in keys if k[i] in valset}
 
-    # Retrieve a pre-defined kernel option if defined by name or version
-    selected = None
-    try:
-        selected = func.OPTIONS[name]
-        name = None
-    except (KeyError, TypeError):
-        pass
+        return keys
 
-    if selected is None:
-        try:
-            selected = func.OPTIONS[versions]
-            versions = None
-        except (KeyError, TypeError):
-            pass
+    def exclusion_keys(property_values, kfile):
+        """The set of exclusion keys to which the given KernelFile applies."""
 
+        keylist = [[]]
+        for name in func.EXCLUDE:
+            options = kfile.properties.get(name, property_values[name])
+            if options is None:
+                options = property_values[name]
+            if not isinstance(options, set):
+                options = {options}
 
-#     if not isinstance(known, (list,tuple)):
-#         known = [known]
-#
-#     for x in known:
-#         if hasattr(x, '__call__'):
-#
-#         if isinstance(x, Kernel):
-#
-#         if isinstance(x, KTuple):
-#
-#         if isinstance(x, str):
-#
+            new_keylist = []
+            for option in options:
+                new_keylist += [k + [option] for k in keylist]
+            keylist = new_keylist
 
+        return {tuple(x) for x in keylist}
 
+    #### Begin active code
 
+    # Fill in default property values
+    for name in func.PROPNAMES:
+        if name not in properties:
+            properties[name] = func.DEFAULT_PROPERTIES[name]
 
-    # Use this list of basenames as a starting point, allowing for other constraints
-    if selected:
-        basenames = selected.get_basenames()
+    # Fill in default times if necessary
+    if tmin is None or tmax is None:
+        if func.DEFAULT_TIMES_KEY:
+            keys = property_keys(func.DEFAULT_TIMES_KEY, func.DEFAULT_TIMES)
+            if tmin is None:
+                tmin = min(func.DEFAULT_TIMES[k][0] for k in keys)
+            if tmax is None:
+                tmax = min(func.DEFAULT_TIMES[k][1] for k in keys)
+        elif func.DEFAULT_TIMES:
+            if tmin is None:
+                tmin = func.DEFAULT_TIMES[0]
+            if tmax is None:
+                tmax = func.DEFAULT_TIMES[1]
+
+    # Fill in default NAIF IDs if necessary
+    if not ids:
+        if func.DEFAULT_IDS_KEY:
+            keys = property_keys(func.DEFAULT_IDS_KEY, func.DEFAULT_IDS)
+            ids = set()
+            for key in keys:
+                ids |= func.DEFAULT_IDS[key]
+        elif func.DEFAULT_IDS:
+            ids = func.DEFAULT_IDS
+
+    # Identify all local or known files
+    if not func.LOCAL:
+        if func.UNKNOWN:
+            basenames = set(KernelFile.find_all(func.UNKNOWN, exists=True,
+                                                sort=func.SORT))
+            basenames |= func.KNOWN
+        else:
+            basenames = func.KNOWN
+        func.LOCALS = list(basenames)
+        func.LOCALS.sort(key=func.SORT)
+
+    # Renew basename list if necessary; identify ordered list of all usable basenames
+    if renew:
+        if not func.LOCAL_AND_REMOTE:
+            basenames = set(func.LOCALS)
+            for url in func.SOURCE:
+                for pattern in func.UNKNOWN:
+                    basenames |= set(KernelFile.search_fancy_index(pattern, url))
+            func.LOCAL_AND_REMOTE = list(basenames)
+            func.LOCAL_AND_REMOTE.sort(key=func.SORT)
+
+        basenames = func.LOCAL_AND_REMOTE
     else:
-        basenames = func.BASENAMES
+        basenames = func.LOCAL
 
-    # Filter basenames based on given attributes
-    basenames = KernelFile.filter_basenames(basenames, name=name, tmin=tmin, tmax=tmax,
-                                            ids=ids, dates=dates, versions=versions,
-                                            expand=expand, reduce=True,
-                                            **properties)
+    # Switch from basenames to KernelFiles
+    kfiles = [KernelFile(b) for b in basenames]
 
-    if not basenames:
-        raise ValueError(f'No {func.TITLE} files match the constraints')
+    # Filter based on function inputs
+    kfiles = KernelFile.filter_basenames(kfiles, tmin=tmin, tmax=tmax, ids=ids,
+                                         name=basename, version=version,
+                                         release_date=release_date, expand=expand,
+                                         reduce=func.REDUCE)
 
-    # If the basename list is unchanged, use the kernel originally selected
-    if selected and set(selected.get_basenames()) == set(basenames):
-        return selected
+    # Apply exclusions
+    if isinstance(func.EXCLUDE, (list, tuple)):
 
-    # Otherwise, return a new Kernel object
-    return KernelSet(basenames, ordered=func.ordered)
+        # Create a dictionary containing all possible exclusion keys;
+        property_values = {}
+        for name in func.EXCLUDE:
+            property_values[name] = set()
+            for kfile in kfiles:
+                value = kfile.properties.get(name, set())
+                if isinstance(value, set):
+                    property_values[name] |= value
+                else:
+                    property_values[name].add(value)
+
+        # For each kernel starting from highest precedence...
+        keys_found = set()
+        new_kfiles = []
+        for kfile in kfiles[::-1]:
+
+            # If all the exclusion keys were already found, skip
+            keys = exclusion_keys(property_values, kfile)
+            if not (keys in keys_found):
+                keys_found |= keys
+                new_kfiles.append(kfile)
+
+        kfiles = new_kfiles[::-1]
+
+    elif func.EXCLUDE:
+        if kfiles:
+            kfiles = kfiles[-1:]
+
+    # Construct the kernel
+    if not kfiles:
+        return None
+
+    if len(kfiles) == 1:
+        result = kfiles[-1]
+    else:
+        result = KernelSet(kfiles, ordered=func.ORDERED)
+
+    result.add_superseders(func.SUPERSEDERS)
+
+    # Prerequisites and co-requisites
+    for kernel in func.REQUIRE:
+        if not isinstance(kernel, Kernel):
+            kernel = kernel(version=version, basename=basename, tmin=tmin, tmax=tmax,
+                            ids=ids, release_date=release_date, expand=expand,
+                            renew=renew, **properties)
+        result.require(kernel)
+
+    return result
 
 
-def spicefunc(funcname, pattern, title, *, tuples=[], extras=[], exclusive=False, reduce=True, bodies=set(),
-              propnames=[], docstrings={}, notes='', default_naif_ids={}, naif_ids_key=(),
-              default_time={}, time_key=(), known=[], ordered=True, use_others=True,
-              missing='download', properties={},
-              basenames=None):
-    """
+def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alpha',
+              exclude=False, reduce=False, ordered=False, superseders=[], require=(),
+              default_times=None, default_time_key=(),
+              default_ids=None, default_id_key=(),
+              default_properties={},
+              notes='', docstrings={}, propnames=[]):
+    """Function returning a function that returns Kernel objects based on a set of
+    standardized inputs plus option case-specific properties.
+
     Inputs:
         funcname    name of the function, e.g., "spk". Appears in the help message.
-        pattern     regular expression for the basenames as a string or re.Pattern.
         title       optional title string describing the kernels, to appear in the help
-                    info, e.g., "Cassini".
-        tuples      list of KTuples or basenames.
-        extras      list of KTuples or basenames to be treated as special-purpose only.
-        exclusive   True if all the file basenames should be exclusive of one another.
-        bodies      set of NAIF IDs, needed if exclusive is False to determine what is the
-                    minimum set of kernels.
-        propnames   optional list of property names for added input options.
-        docstrings  a dictionary of docstring definitions of parameters, keyed by the
-                    property names.
-        basenames   optional list of basenames to use in place of the pattern.
-        use_alts    True to use files identified by pattern in addition to those listed
-                    by basename; False to use basenames only. Ignored if no basenames are
-                    provided.
-        missing     How to handle missing files.
+                    info, e.g., "Cassini SPK".
+        known       list of known KTuples or basenames that can be used.
+        unknown     optional regular expression that will match new kernel basenames.
+        source      an online directory URL where unknown files can be found; alternately,
+                    a list of one or more source URLS.
+        sort        an indication of how file basenames are sorted. Use "alpha" for an
+                    alphabetical sort, "version" for a version sort, "date" to sort by
+                    release date, or provide a function that receives a file basename and
+                    returns its sort key.
+        exclude     True to prevent more than one file from being furnished; False to
+                    allow any number of files to be furnished. Alternatively, as property
+                    name or list of property names in which case no more than one file
+                    will be furnished for each unique set of these properties.
+        reduce      If True, any kernel files whose coverage is eclipsed by kernel files
+                    later in the list will be eliminated from the returned Kernel object.
+        ordered     True if the known files must be furnished in the order given; False if
+                    they can be furnished in any order.
+        superseders optional list of superseder tuples (basename1, basename2, ...] for
+                    this kernel such that any file matching the first basename will have
+                    a higher precedence than any files matching subsequent basenames.
+        require     one or more prerequisite kernels for this kernel. If a function is
+                    provided, that function is called using all the same inputs as this
+                    function.
+        default_times       a two-element tuple of default values for (tmin, tmax).
+                            Alternatively, a dictionary of tuples keyed by the
+                            default_time_key.
+        default_times_key   list of property names used as indices into the default_times
+                            dictionary key.
+        default_ids         the set of NAIF IDs to use by default. Alternatively, a
+                            dictionary of sets using the default_id_key.
+        default_ids_key     list of property names used as indices into the default_ids
+                            dictionary key.
+        default_properties  a dictionary of the default value for each property; property
+                            names not included have a default value of None.
+        notes       optional, fully-formatted string to insert into the docstring
+                    before the inputs.
+        docstrings  a dictionary of docstring definitions of parameters, keyed by
+                    the property names.
+        propnames   ordered list of property names.
     """
 
-    def wrapper(key=None, *, tmin=None, tmax=None, ids=None, dates=None,
-                versions=None, expand=False, **properties):
+    def wrapper(version=None, *, tmin=None, tmax=None, ids=None, dates=None,
+                expand=False, download=True, verbose=True, **properties):
         return func_template(wrapper, tmin=tmin, tmax=tmax, ids=ids,
-                             dates=dates, versions=versions, expand=expand, **properties)
+                             dates=dates, version=version, expand=expand, **properties)
 
-    wrapper.INITIALIZED = False
-    wrapper.FUNCNAME = funcname
-    wrapper.PATTERN = re.compile(pattern)
-#     wrapper.INFO = info
-    wrapper.EXTRAS = extras
-    wrapper.EXCLUSIVE = exclusive
-    wrapper.BODIES = bodies
-    wrapper.BASENAMES = basenames
-    wrapper.NOTES = notes
+    # Set info for the known kernels
+    KernelFile.set_info(known)
 
+    # Convert to a set of basenames
+    known = {k.basename if isinstance(k, KTuple) else k for k in known}
+
+    # Define sort function, sort known basenames
+    sort = KernelFile.basename_sort_key(sort)
+    sorted = list(known)
+    sorted.sort(key=sort)
+
+    # Define properties and defaults
+    propnames = _input_list(propnames)
+    if not propnames and docstrings:
+        propnames = list(docstrings.keys())
+
+    if not default_properties:
+        default_properties = {}
+
+    for propname in propnames:
+        if propname not in default_properties:
+            default_properties[propname] = None
+
+    # Exclude must be True, False, or an ordered list of property names
+    if isinstance(exclude, str):
+        exclude = [exclude]
+    elif isinstance(exclude, set):
+        exclude = list(exclude)
+
+    # Annotate the function
     if title and not title.endswith(' '):
         title = title + ' '
-    wrapper.TITLE = title
 
     if isinstance(propnames, (list,tuple)):
         wrapper.PROPNAMES = propnames
@@ -168,78 +297,32 @@ def spicefunc(funcname, pattern, title, *, tuples=[], extras=[], exclusive=False
         wrapper.PROPNAMES = [propnames]
 
     property_docs = ''.join([docstrings[k] for k in wrapper.PROPNAMES])
-    wrapper.__doc__ = DOCSTRING_TEMPLATE.format(TITLE=wrapper.TITLE,
+    wrapper.__doc__ = DOCSTRING_TEMPLATE.format(TITLE=title,
                                                 PROPERTIES=property_docs,
                                                 NOTES=wrapper.NOTES)
     wrapper.__name__ = funcname
 
+    # Fill in function attributes to define the behavior of the kernel function
+    wrapper.FUNCNAME = funcname
+
+    wrapper.KNOWN = known
+    wrapper.UNKNOWN = _input_set(unknown)
+    wrapper.LOCAL = []
+    wrapper.LOCAL_AND_REMOTE = []
+
+    wrapper.SOURCE = _input_list(source)
+    wrapper.SORT = sort
+    wrapper.EXCLUDE = exclude
+    wrapper.ORDERED = ordered
+    wrapper.SUPERSEDERS = superseders
+    wrapper.REQUIRE = _input_set(require)
+    wrapper.DEFAULT_TIMES = default_times or (None, None)
+    wrapper.DEFAULT_TIME_KEY = _input_list(default_time_key)
+    wrapper.DEFAULT_IDS = default_ids or set()
+    wrapper.DEFAULT_ID_KEY = _input_list(default_id_key)
+    wrapper.PROPNAMES = propnames
+    wrapper.DEFAULT_PROPERTIES = default_properties
+
     return wrapper
-
-
-def _initialize(func):
-
-    KernelFile.initialize()
-
-    if func.INITIALIZED:
-        return
-
-    # In the list of known basenames, those in EXTRAS occur before those in INFO to ensure
-    # that they never take precedence.
-    merged = func.EXTRAS + func.INFO
-
-    # Define the known kernels
-    ktuples = [k for k in merged if not isinstance(k, str)]
-    KernelFile.set_info(ktuples)
-    known_basenames = [k if isinstance(k,str) else k.basename for k in merged]
-
-    # Identify the local kernels
-    if not func.BASENAMES:
-        func.BASENAMES = KernelFile.find_all(func.PATTERN, order=known_basenames)
-            # order=known_basenames ensures the order of file names in BASENAMES matches
-            # the order in INFO, so if INFO is in priority order, BASENAMES will be too.
-
-    if not func.BASENAMES:
-        raise RuntimeError(f'No {func.TITLE} files found matching pattern '
-                           + repr(func.PATTERN))
-
-    # Apply exclusion; define "latest"
-    latest = None
-    if func.EXCLUSIVE:
-        KernelFile.exclude_basenames(func.BASENAMES)
-        latest = KernelFile(func.BASENAMES[-1])
-    else:
-        latest = KernelSet(func.BASENAMES, ordered=True, reduce=True,
-                           naif_ids=func.BODIES)
-        basenames = latest.get_basenames()
-        if len(basenames) == 1:
-            latest = KernelFile(basenames[0])
-
-    func.OPTIONS = {'latest': latest}
-        # This is the default version of the kernel. It will always use the latest
-        # available kernel files for any time, any NAIF ID. If it is None here, it will be
-        # be replaced below.
-
-    # Add KernelFiles keyed by basename to the OPTIONS dictionary
-    for basename in func.BASENAMES:
-        kernel = KernelFile(basename)
-        func.OPTIONS[basename] = kernel
-
-        # Also key by altnames
-        for altname in kernel.altnames:
-            func.OPTIONS[altname] = kernel
-
-    # Create KernelSets for any kernel versions that are spread across multiple files
-    vdict = {}
-    for basename in func.BASENAMES:
-        version = KernelFile(basename).version
-        vdict.setdefault(version, []).append(basename)
-
-    for version, basenames in vdict.items():
-        if len(basenames) == 1:     # With only one file, reuse the KernelFile
-            func.OPTIONS[version] = func.OPTIONS[basenames[0]]
-        elif not func.EXCLUSIVE:
-            func.OPTIONS[version] = KernelSet(basenames, ordered=True)
-
-    func.INITIALIZED = True
 
 ##########################################################################################

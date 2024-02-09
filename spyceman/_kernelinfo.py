@@ -16,7 +16,7 @@ import textkernel
 
 from spyceman.rule    import Rule, _DefaultRule
 from spyceman._ktypes import _EXTENSIONS, _KTYPES
-from spyceman._utils  import validate_release_date, validate_version, \
+from spyceman._utils  import validate_release_date, validate_version, validate_naif_ids, \
                              naif_ids_with_aliases, naif_ids_wo_aliases
 
 
@@ -24,7 +24,7 @@ class _KernelInfo(object):
 
     ABSPATHS = {}               # basename -> abspath
     KERNELINFO = {}             # basename -> unique _KernelInfo object
-    BASENAMES_BY_KTYPE = {}     # ktype -> set of associated basenames
+    BASENAMES_BY_KTYPE = {}     # ktype -> set of associated, known basenames
     for ktype in _KTYPES:
         BASENAMES_BY_KTYPE[ktype] = set()
 
@@ -41,7 +41,7 @@ class _KernelInfo(object):
             raise ValueError('_KernelInfo already defined for ' + basename)
 
         self._basename = basename
-        self._ext = _KernelInfo.basename_ext(basename)
+        self._ext = '.' + basename.rpartition('.')[-1]
         self._ktype = _EXTENSIONS.get(self._ext.lower(), '')
         if not self._ktype:
             raise ValueError('invalid kernel file extension: ' + repr(basename))
@@ -62,6 +62,8 @@ class _KernelInfo(object):
         self._release_date = None
         self._version = None
         self._family = None
+        self._source = None
+        self._dest = None
 
         # Special support for metakernels
         self._meta_basenames = None
@@ -69,13 +71,14 @@ class _KernelInfo(object):
         # Info derived via basename rules
         self.__rule_values = None
         self.__default_values = None
+        self._rule_properties = None
         self._properties = None
-        self._prev_properties = None
 
         # Track manual definitions for cases where an abspath changes
         self._manual_defs = []
 
         _KernelInfo.KERNELINFO[basename] = self
+        _KernelInfo.BASENAMES_BY_KTYPE[self._ktype].add(self._basename)
 
     @staticmethod
     def lookup(basename):
@@ -97,11 +100,7 @@ class _KernelInfo(object):
         """Rule values as a dictionary."""
 
         if self.__rule_values is None:
-            self.__rule_values = Rule.apply(self._basename)
-            if not _KernelInfo._USE_RULES:
-                for key in ('date', 'time', 'version', 'family'):
-                    if key in self.__rule_values:
-                        del self.__rule_values[key]
+            self.__rule_values = Rule.apply_all(self._basename)
 
         return self.__rule_values
 
@@ -127,6 +126,13 @@ class _KernelInfo(object):
     def exists(self):
         """True if this kernel file exists."""
         return self._basename in _KernelInfo.ABSPATHS
+
+    @property
+    def is_known(self):
+        """True if this kernel file basename has been defined; it might not exist as a
+        local file.
+        """
+        return self._basename in _KernelInfo.KERNELINFO
 
     @property
     def ext(self):
@@ -324,6 +330,13 @@ class _KernelInfo(object):
             self._naif_ids = set()
             self._naif_as_found = set()
             self._naif_wo_aliases = set()
+            return self._naif_ids
+
+        # Check the rule results
+        if 'naif_ids' in self._rule_values:
+            self._naif_as_found = self._rule_values['naif_ids']
+            self._naif_ids = naif_ids_with_aliases(self._naif_as_found)
+            self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
             return self._naif_ids
 
         # In any other case, file access is needed
@@ -598,8 +611,6 @@ class _KernelInfo(object):
     # Release date
     ######################################################################################
 
-    _JANUARY_1995 = julian.day_from_yd(1995, 1)
-
     # Match for lines that contain some other kind of date, not a release date
     _IGNORE1 = re.compile(r'.*((BEGIN|END|START|STOP)[_ ]TIME|Timespan)', re.I)
 
@@ -624,7 +635,7 @@ class _KernelInfo(object):
             return self._release_date
 
         # 2. Check the most reliable internal comment fields
-        for match_pattern in ('; Created ', 'Release to: Horizons', 'DELIVERY DATE:',
+        for match_pattern in ('Release to: ', 'DELIVERY DATE:', '; Created ',
                               'SATEPHMERGE', 'SATMERGE', 'SATGEN',
                               'Run Date:', 'PRODUCT_CREATION_TIME'):
             daylist = []
@@ -632,7 +643,6 @@ class _KernelInfo(object):
                 if match_pattern in rec:
                     daylist += julian.days_in_strings(rec)
 
-            daylist = [d for d in daylist if d > _KernelInfo._JANUARY_1995]
             if daylist:
                 self._release_date = julian.format_day(max(daylist))
                 return self._release_date
@@ -689,7 +699,7 @@ class _KernelInfo(object):
     def release_date(self, date):
         """Define the release date for this kernel file."""
 
-        self._release_date = _utils.validate_release_date(date)
+        self._release_date = validate_release_date(date)
         self._manual_defs.append(('_release_date', self._release_date))
 
     ######################################################################################
@@ -698,31 +708,33 @@ class _KernelInfo(object):
 
     @property
     def version(self):
-        """Version of this kernel file as a string, integer, or tuple of integers; "" if
-        unavailable.
+        """Version of this kernel file as a string, integer, tuple of integers, or set
+        of one or more of the above; "" if unavailable.
         """
 
         if self._version is not None:
             return self._version
 
         if 'version' in self._rule_values:
-            self._version = self._rule_values['version']
+            self._version = validate_version(self._rule_values['version'])
         elif 'version' in self._default_values:
-            self._version = self._default_values['version']
+            self._version = validate_version(self._default_values['version'])
         else:
             self._version = self.release_date
 
         return self._version
 
     @property
-    def version_set(self):
+    def version_as_set(self):
         if isinstance(self.version, set):
             return self.version
+        if self.version == '':
+            return set()
         return {self.version}
 
     @version.setter
     def version(self, value):
-        self._version = _utils.validate_version(value)
+        self._version = validate_version(value)
         self._manual_defs.append(('_version', self._version))
 
     @property
@@ -750,6 +762,35 @@ class _KernelInfo(object):
         self._manual_defs.append(('_family', self._family))
 
     ######################################################################################
+    # Download support
+    ######################################################################################
+
+    @property
+    def source(self):
+        if self._source is None:
+            self._source = self._rules_values.get('source', [])
+
+        return self._source
+
+    @source.setter
+    def source(self, value):
+        if isinstance(value, str):
+            value = [value]
+
+        self._source = value
+
+    @property
+    def dest(self):
+        if self._dest is None:
+            self._dest = self._rules_values.get('dest', '')
+
+        return self._dest
+
+    @dest.setter
+    def dest(self, value):
+        self._dest = value
+
+    ######################################################################################
     # Custom properties
     ######################################################################################
 
@@ -768,25 +809,26 @@ class _KernelInfo(object):
         if self._rule_properties is None:
             self._rule_properties = {}
             for key, value in self._rule_values.items():
-                if key in ('date', 'time', 'version', 'family'):
+                if key in ('release_date', 'time', 'version', 'family', 'naif_ids'):
                     continue
                 self._rule_properties[key] = value
 
-            if self._properties is None:
-                self._properties = _KernelInfo.local_dict()
+        if self._properties is None:
+            self._properties = _KernelInfo._local_dict()
+            self._properties.update(self._rule_properties)
 
         return self._properties
 
     def add_property(self, name, value):
         """Add or modify a property, same as "self.properties[name] = value"."""
 
-        super(_local_dict, self.properties).__setitem__(name, value)
+        super(_KernelInfo._local_dict, self.properties).__setitem__(name, value)
         self._manual_defs.append(('add_property', name, value))
 
     def remove_property(self, name):
         """Remove a property, same as "del self.properties[name]"."""
 
-        super(_local_dict, self.properties).__delitem__(name)
+        super(_KernelInfo._local_dict, self.properties).__delitem__(name)
         self._manual_defs.append(('remove_property', name))
 
     ######################################################################################
@@ -815,35 +857,6 @@ class _KernelInfo(object):
     # Utilities
     ######################################################################################
 
-    # Regular expression that matches any standard file basename
-    ext_regex = '(' + '|'.join(ext[1:] for ext in _EXTENSIONS) + ')'
-    BASENAME_REGEX = re.compile(r'[\w.-]+\.' + ext_regex + '$', re.I)
-
-    @staticmethod
-    def is_basename(basename):
-        """True if this string appears to be a valid kernel file basename."""
-
-        return (isinstance(basename, str)
-                and bool(_KernelInfo.BASENAME_REGEX.match(basename)))
-
-    @staticmethod
-    def basename_ext(basename):
-        """The extension of this basename or regular expression."""
-
-        if isinstance(basename, re.Pattern):
-            basename = basename.pattern
-
-        ext = basename.rpartition('.')[-1]
-        return '.' + ext
-
-    @staticmethod
-    def basename_ktype(basename):
-        """The ktype of this basename or regular expression; an empty string if unknown.
-        """
-
-        ext = _KernelInfo.basename_ext(basename).lower()
-        return _EXTENSIONS.get(ext, '')
-
     @staticmethod
     def match(pattern, flags=re.I):
         """The set of existing basenames that match the given regular expression.
@@ -860,8 +873,7 @@ class _KernelInfo(object):
 
     @staticmethod
     def replace(basename, abspath):
-        """Replace an existing KernelFile with the same basename as this abspath.
-        """
+        """Replace an existing KernelFile with the same basename."""
 
         manual_defs = _KernelInfo.KERNELINFO[basename]._manual_defs
         del _KernelInfo.KERNELINFO[basename]
@@ -873,5 +885,7 @@ class _KernelInfo(object):
                 new_object.__dict__[name] = item[1]
             else:
                 _KernelInfo.__dict__[name](new_object, *item[1:])
+
+        _KernelInfo.ABSPATHS[basename] = abspath
 
 ##########################################################################################

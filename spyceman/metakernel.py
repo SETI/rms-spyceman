@@ -1,7 +1,7 @@
 ##########################################################################################
-# kernel/metakernel.py
+# spyceman/metakernel.py
 ##########################################################################################
-"""Definition of the Metakernel subclass of class KernelFile."""
+"""Definition of the Metakernel subclass of class Kernel."""
 
 from spyceman.kernel      import Kernel
 from spyceman.kernelfile  import KernelFile

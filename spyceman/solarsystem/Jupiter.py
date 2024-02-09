@@ -1,13 +1,12 @@
 ##########################################################################################
-# spyceman/planets/jupiter.py: Kernel management for the Jupiter system
-#
-# Kernel info last updated 3/19/23
+# spyceman/planets/Jupiter.py: Kernel management for the Jupiter system
 ##########################################################################################
 """\
-spyceman.planets.jupiter: Support for Jupiter-specific kernels.
+Support for Jupiter-specific kernels. Last updated 2024-02-01.
 
 The following attributes are defined:
 
+NAME            "JUPITER".
 ALL_MOONS       the set of all IDs for Jupiter's moons, including aliases.
 GALILEANS       the set of IDs of the Galileo satellites.
 CLASSICAL       same as GALILIEANS.
@@ -16,362 +15,179 @@ REGULAR         the set of IDs of the regular satellites.
 IRREGULAR       the set of IDs of the Jovian irregular satellites, including their
                 aliases.
 UNNAMED         the set of IDs of moons that are not yet officially named.
-ID              the NAIF ID of Jupiter.
+BODY_ID         the NAIF ID of Jupiter.
 SYSTEM          the set of IDs of the planet and all inner or classical moons.
-ALL_IDS         the set of IDs of the planet and all moons.
+ALL_IDS         the set of IDs of the planet and all moons, including their aliases.
 BARYCENTER      the NAIF ID of the Jupiter system barycenter.
+BODY_IDS        dictionary that maps every body name to its body ID.
+BODY_NAMES      dictionary that maps every body ID to its name.
+
+FRAME_ID        the NAIF ID of the Jupiter rotation frame.
+FRAME_IDS       dictionary that maps every body name to its frame ID.
+FRAME_CENTERS   dictionary that maps every frame ID to the body ID of its center.
+
+The following functions are defined:
+
 spk()           function returning a Kernel object derived from one or more Jupiter SPK
                 files.
-
-In addition, the NAIF body ID of every moon can be reference by name:
-
-IO              501, the body ID of Io.
-EUROPA          502, the body ID of Europa.
-S2022_J3        55523, the body ID of S/2022 J 3.
 """
 
-from spyceman import CSPYCE, KTuple, spicefunc
+import warnings
+
+from spyceman.rule        import Rule
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
+from spyceman.spicefunc   import spicefunc
+from spyceman._cspyce     import CSPYCE
 
 ##########################################################################################
-# Managed list of known updates to SPICE names and IDs.
+# Managed list of known Jovian moons and their SPICE IDs
 ##########################################################################################
 
 _JUPITER_ALIASES = [
-    # Jupiter [new code, old code], [formal name, provisional name]
-    [[  549, 55054       ], ['KORE'         , 'S2003_J14']],
-    [[  550, 55057       ], ['HERSE'        , 'S2003_J17']],
-    [[  551, 55072       ], [                 'S2010_J1' ]],
-    [[  552, 55073       ], [                 'S2010_J2' ]],
-    [[  553, 55076       ], ['DIA'          , 'S2000_J11']],
-    [[  554              ], [                 'S2016_J1' ]],
-    [[  555, 55058, 55069], [                 'S2003_J18']],
-    [[  556, 55075       ], [                 'S2011_J2' ]],
-    [[  557, 55063       ], ['EIRENE'       , 'S2003_J5' ]],
-    [[  558, 55055, 55067], ['PHILOPHROSYNE', 'S2003_J15']],
-    [[  559              ], [                 'S2017_J1' ]],
-    [[  560, 55053, 55061], ['EUPHEME'      , 'S2003_J3' ]],
-    [[  561, 55059, 55070], [                 'S2003_J19']],
-    [[  562              ], [                 'S2016_J2' ]],
-    [[  563              ], [                 'S2017_J2' ]],
-    [[  564              ], [                 'S2017_J3' ]],
-    [[  565              ], ['PANDIA'       , 'S2017_J4' ]],
-    [[  566              ], [                 'S2017_J5' ]],
-    [[  567              ], [                 'S2017_J6' ]],
-    [[  568              ], [                 'S2017_J7' ]],
-    [[  569              ], [                 'S2017_J8' ]],
-    [[  570              ], [                 'S2017_J9' ]],
-    [[  571              ], ['ERSA'         , 'S2018_J1' ]],
-    [[  572, 55074       ], [                 'S2011_J1' ]],
-    [[55501, 55051, 55060], [                 'S2003_J2' ]],
-    [[55502, 55062       ], [                 'S2003_J4' ]],
-    [[55503, 55049, 55064], [                 'S2003_J9' ]],
-    [[55504, 55050, 55065], [                 'S2003_J10']],
-    [[55505, 55052, 55066], [                 'S2003_J12']],
-    [[55506, 55056, 55068], [                 'S2003_J16']],
-    [[55507, 55071       ], [                 'S2003_J23']],
-    [[55508              ], [                 'S2003_J24']],
-    [[55509              ], [                 'S2011_J3' ]],
-    [[55510              ], [                 'S2018_J2' ]],
-    [[55511              ], [                 'S2018_J3' ]],
-    [[55512              ], [                 'S2021_J1' ]],
-    [[55513              ], [                 'S2021_J2' ]],
-    [[55514              ], [                 'S2021_J3' ]],
-    [[55515              ], [                 'S2021_J4' ]],
-    [[55516              ], [                 'S2021_J5' ]],
-    [[55517              ], [                 'S2021_J6' ]],
-    [[55518              ], [                 'S2016_J3' ]],
-    [[55519              ], [                 'S2016_J4' ]],
-    [[55520              ], [                 'S2018_J4' ]],
-    [[55521              ], [                 'S2022_J1' ]],
-    [[55522              ], [                 'S2022_J2' ]],
-    [[55523              ], [                 'S2022_J3' ]],
+    # Jupiter [new code, old code(s)], [formal name, provisional name(s)]
+    [[  549, 55054       ], ['KORE'         , 'S/2003_J_14']],
+    [[  550, 55057       ], ['HERSE'        , 'S/2003_J_17']],
+    [[  551, 55072       ], [                 'S/2010_J_1' ]],
+    [[  552, 55073       ], [                 'S/2010_J_2' ]],
+    [[  553, 55076       ], ['DIA'          , 'S/2000_J_11']],
+    [[  554              ], [                 'S/2016_J_1' ]],
+    [[  555, 55058, 55069], [                 'S/2003_J_18']],
+    [[  556, 55075       ], [                 'S/2011_J_2' ]],
+    [[  557, 55063       ], ['EIRENE'       , 'S/2003_J_5' ]],
+    [[  558, 55055, 55067], ['PHILOPHROSYNE', 'S/2003_J_15']],
+    [[  559              ], [                 'S/2017_J_1' ]],
+    [[  560, 55053, 55061], ['EUPHEME'      , 'S/2003_J_3' ]],
+    [[  561, 55059, 55070], [                 'S/2003_J_19']],
+    [[  562              ], [                 'S/2016_J_2' ]],
+    [[  563              ], [                 'S/2017_J_2' ]],
+    [[  564              ], [                 'S/2017_J_3' ]],
+    [[  565              ], ['PANDIA'       , 'S/2017_J_4' ]],
+    [[  566              ], [                 'S/2017_J_5' ]],
+    [[  567              ], [                 'S/2017_J_6' ]],
+    [[  568              ], [                 'S/2017_J_7' ]],
+    [[  569              ], [                 'S/2017_J_8' ]],
+    [[  570              ], [                 'S/2017_J_9' ]],
+    [[  571              ], ['ERSA'         , 'S/2018_J_1' ]],
+    [[  572, 55074       ], [                 'S/2011_J_1' ]],
+    [[55501, 55051, 55060], [                 'S/2003_J_2' ]],
+    [[55502, 55062       ], [                 'S/2003_J_4' ]],
+    [[55503, 55049, 55064], [                 'S/2003_J_9' ]],
+    [[55504, 55050, 55065], [                 'S/2003_J_10']],
+    [[55505, 55052, 55066], [                 'S/2003_J_12']],
+    [[55506, 55056, 55068], [                 'S/2003_J_16']],
+    [[55507, 55071       ], [                 'S/2003_J_23']],
+    [[55508              ], [                 'S/2003_J_24']],
+    [[55509              ], [                 'S/2011_J_3' ]],
+    [[55510              ], [                 'S/2018_J_2' ]],
+    [[55511              ], [                 'S/2018_J_3' ]],
+    [[55512              ], [                 'S/2021_J_1' ]],
+    [[55513              ], [                 'S/2021_J_2' ]],
+    [[55514              ], [                 'S/2021_J_3' ]],
+    [[55515              ], [                 'S/2021_J_4' ]],
+    [[55516              ], [                 'S/2021_J_5' ]],
+    [[55517              ], [                 'S/2021_J_6' ]],
+    [[55518              ], [                 'S/2016_J_3' ]],
+    [[55519              ], [                 'S/2016_J_4' ]],
+    [[55520              ], [                 'S/2018_J_4' ]],
+    [[55521              ], [                 'S/2022_J_1' ]],
+    [[55522              ], [                 'S/2022_J_2' ]],
+    [[55523              ], [                 'S/2022_J_3' ]],
 ]
 
-def _srange(*args):
-    return set(range(*args))
+NAME       = 'JUPITER'
+BODY_ID    = 599
+BARYCENTER = BODY_ID // 100
+BODY_IDS   = {NAME: BODY_ID, 'BARYCENTER': BARYCENTER, NAME + ' BARYCENTER': BARYCENTER}
+BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
 
-# Define aliases within cspyce; save complete list of NAIF IDs
-ALL_MOONS = set(range(501, 573))
-for (_naif_ids, _names) in _JUPITER_ALIASES:
-    CSPYCE.define_body_aliases(*(_names + _naif_ids))
-    ALL_MOONS |= set(_naif_ids)
+ALL_MOONS = _srange(501, 573)
+for body_id in ALL_MOONS:
+    body_name, found = CSPYCE.bodc2n(body_id)
+    if found:
+        BODY_IDS[body_name] = body_id
+        BODY_NAMES[body_id] = body_name
+
+# Update the irregulars and their aliases
+warned = False
+for body_ids, body_names in _JUPITER_ALIASES:
+    try:
+        CSPYCE.define_body_aliases(*(body_names + body_ids))
+    except RuntimeError:
+        if not warned:
+            warnings.warn(f'Pool overflow at f{tuple(body_names + body_ids)}')
+            warned = True
+
+    ALL_MOONS |= set(body_ids)
+    for body_name in body_names:
+        BODY_IDS[body_name] = body_ids[0]
+    for body_id in body_ids:
+        BODY_NAMES[body_id] = body_names[0]
 
 # Categorize moons
-GALILEANS = _srange(501, 505)
-CLASSICAL = GALILEANS
+CLASSICAL = _srange(501, 505)
+GALILEANS = CLASSICAL
 SMALL_INNER = {505} | _srange(514, 518)
+REGULAR = CLASSICAL | SMALL_INNER
 
 UNNAMED = set()
-for (_naif_ids, _names) in _JUPITER_ALIASES:
-    if '_' in _names[0]:
-        UNNAMED |= set(_naif_ids)
+IRREGULAR = set()
+for (body_ids, body_names) in _JUPITER_ALIASES:
+    if not set(body_ids) & REGULAR:
+        IRREGULAR |= set(body_ids)
+    if '_' in body_names[0]:
+        UNNAMED |= set(body_ids)
 
-IRREGULAR = _srange(506, 514) | _srange(517, 573) | UNNAMED
-REGULAR   = ALL_MOONS - IRREGULAR
+SYSTEM  = {BODY_ID} | CLASSICAL | SMALL_INNER
+ALL_IDS = {BODY_ID} | ALL_MOONS
 
-ID         = 599
-SYSTEM     = {ID} | CLASSICAL | SMALL_INNER
-ALL_IDS    = {ID} | ALL_MOONS
-BARYCENTER = 5
-
-# Define every moon's name as an attribute
-for _naif_id in ALL_MOONS:
-    (_naif_ids, _aliases) = CSPYCE.get_body_aliases(_naif_id)
-    for _alias in _aliases:
-        locals()[_alias] = _naif_id
+del _srange, body_id, body_ids, body_name, body_names, warned
 
 ##########################################################################################
-# Managed list of known JUPnnn SPK kernels
+# Frames
 ##########################################################################################
 
-_JUPITER_KTUPLES = [
+FRAME_ID, frame_name, found = CSPYCE.cidfrm(NAME)
+FRAME_IDS = {NAME: FRAME_ID}
+FRAME_CENTERS = {FRAME_ID: BODY_ID}
+for body_name, body_id in BODY_IDS.items():
+    frame_id, frame_name, found = CSPYCE.cidfrm(body_id)
+    if not found:
+        frame_id = body_id      # if not already defined, use the body ID as the frame ID
 
-KTuple('jup068.bsp',
-    '1995-01-01T00:00:00', '2002-01-02T23:59:57',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '1995-01-29'),
-KTuple('jup069.bsp',
-    '1995-01-01T00:00:00', '2002-01-03T12:00:00',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '1996-02-28'),
-KTuple('jup073-hst.bsp',
-    '1996-01-01T00:00:00', '1999-12-31T23:59:58',
-    {3, 5, 10, 301, 399, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511,
-     512, 513, 514, 515, 516, 599},
-    '1996-03-16'),
-KTuple('jup073s.bsp',
-    '1995-01-01T00:00:00', '2001-12-31T23:59:58',
-    {3, 5, 10, 301, 399, 501, 502, 503, 504, 505},
-    '1996-08-12'),
-KTuple('jup100.bsp',
-    '1973-10-31T23:59:15.817', '2023-11-02T23:58:50.817',
-    {3, 5, 10, 301, 399, 501, 502, 503, 504, 599},
-    '1996-08-28'),
-KTuple('jup104.bsp',
-    '1996-09-04T00:00:00', '2002-01-02T23:59:58',
-    {3, 5, 10, 301, 399, 505, 514, 515, 516, 599},
-    '1997-01-16'),
-KTuple('jup120_1996-2010.bsp',
-    '1995-12-31T23:58:58.816', '2009-12-31T23:58:53.816',
-    {3, 5, 10, 301, 399, 505, 514, 515, 516, 599},
-    '1997-09-16'),
-KTuple('jup147s.bsp',
-    '1988-01-01T00:00:00', '2002-01-05T00:00:00',
-    {3, 5, 10, 399, 501, 502, 503, 504, 599},
-    '1999-07-16'),
-KTuple('jup164_20year.bsp',
-    '1999-12-31T23:58:55.816', '2020-12-31T23:58:50.816',
-    {506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '2000-06-01'),
-KTuple('jup164.bsp',
-    '1999-12-31T23:58:55.816', '2020-12-31T23:58:50.816',
-    {506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '2000-06-01'),
-KTuple('jup166.bsp',
-    '1999-12-31T23:58:55.816', '2023-10-30T23:58:50.817',
-    {3, 5, 10, 399, 501, 502, 503, 504, 599},
-    '2000-06-29'),
-KTuple('jup172.bsp',
-    '1999-12-31T23:58:55.816', '2023-10-30T23:58:50.817',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '2000-07-24'),
-KTuple('jup202_2000_2010.bsp',
-    '1999-12-31T23:58:55.816', '2009-12-31T23:58:53.816',
-    {3, 5, 10, 399, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528,
-     599},
-    '2002-01-24'),
-KTuple('jup204.bsp',
-    '1924-12-28T23:59:27.816', '2024-12-31T23:58:50.816',
-    {501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2002-05-06'),
-KTuple('jup214.bsp',
-    '1994-12-31T23:58:58.816', '2023-10-30T23:58:50.817',
-    {3, 5, 10, 399, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 599},
-    '2002-11-04'),
-KTuple('jup215.bsp',
-    '1994-12-31T23:58:58.816', '2023-08-03T23:58:50.817',
-    {3, 5, 10, 399, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 599},
-    '2003-01-16'),
-KTuple('jup219.bsp',
-    '1994-12-31T23:58:58.816', '2023-10-22T23:58:50.818',
-    {3, 5, 10, 399, 540, 599},
-    '2003-01-24'),
-KTuple('jup230-short.bsp',
-    '1999-12-31T23:58:55.816', '2049-12-31T23:58:50.816',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 599},
-    '2004-01-08'),
-KTuple('jup230l.bsp',
-    '1900-01-01T00:00:09', '2100-01-01T23:59:57',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 599},
-    '2009-07-16'),
-KTuple('jup230-rocks.bsp',
-    '1999-12-31T23:58:55.816', '2050-01-01T23:58:50.816',
-    {515, 516},
-    '2007-03-30'),
-KTuple('jup230.bsp',
-    '1900-01-01T00:00:09', '2100-01-01T23:59:57',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 599},
-    '2004-01-08'),
-KTuple('jup251.bsp',
-    '1975-08-16T00:00:00', '2023-07-31T23:59:56',
-    {3, 5, 10, 399, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 599},
-    '2004-11-29'),
-KTuple('jup252.bsp',
-    '2001-11-27T00:00:00', '2023-07-31T23:59:56',
-    {3, 5, 10, 399, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 599},
-    '2004-11-29'),
-KTuple('jup253.bsp',
-    '2002-01-07T00:00:00', '2023-09-11T23:59:56',
-    {3, 5, 10, 399, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 599},
-    '2004-11-29'),
-KTuple('jup254.bsp',
-    '2002-01-07T00:00:00', '2023-09-11T23:59:56',
-    {3, 5, 10, 399, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 599},
-    '2004-11-29'),
-KTuple('jup255.bsp',
-    '2002-01-07T00:00:00', '2023-09-11T23:59:56',
-    {3, 5, 10, 399, 560, 561, 599, 55062, 55063},
-    '2004-11-29'),
-KTuple('jup256.bsp',
-    '1972-01-01T00:00:00', '2049-12-31T23:59:56',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 599},
-    '2006-10-17'),
-KTuple('jup261.bsp',
-    '1975-08-16T00:00:00', '2049-11-13T23:59:56',
-    {3, 5, 10, 399, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 599},
-    '2007-01-02'),
-KTuple('jup262.bsp',
-    '2002-01-06T00:00:00', '2049-12-23T23:59:56',
-    {3, 5, 10, 399, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 599},
-    '2007-01-03'),
-KTuple('jup263.bsp',
-    '2002-01-06T00:00:00', '2049-12-23T23:59:56',
-    {3, 5, 10, 399, 599, 55049, 55050, 55051, 55052, 55053, 55054, 55055, 55056,
-     55057, 55058, 55059, 55060, 55061, 55063},
-    '2007-01-03'),
-KTuple('jup266.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 5, 10, 399, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 599},
-    '2009-09-24'),
-KTuple('jup267.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 5, 10, 399, 599, 55050, 55051, 55052, 55053, 55055, 55056, 55057, 55058,
-     55059, 55060, 55061, 55063, 55064},
-    '2009-09-24'),
-KTuple('jup268.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 5, 10, 399, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 599},
-    '2009-12-17'),
-KTuple('jup269.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 5, 10, 399, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 599},
-    '2009-12-16'),
-KTuple('jup270.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:57',
-    {3, 5, 10, 399, 550, 599, 55060, 55061, 55062, 55063, 55064, 55065, 55066,
-     55067, 55068, 55069, 55070, 55071},
-    '2009-12-17'),
-KTuple('jup282-1.bsp',
-    '1900-01-22T00:00:09', '2099-12-01T23:59:57',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     599, 55060, 55061, 55062, 55063, 55064, 55065, 55066, 55067, 55068, 55069,
-     55070, 55071},
-    '2012-10-25'),
-KTuple('jup282.bsp',
-    '1900-01-22T00:00:09', '2099-12-01T23:59:57',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     599, 55060, 55061, 55062, 55063, 55064, 55065, 55066, 55067, 55068, 55069,
-     55070, 55071, 55072, 55073},
-    '2011-05-26'),
-KTuple('jup291.bsp',
-    '1900-01-01T00:00:09', '2099-12-29T23:59:58',
-    {3, 5, 10, 399, 599, 55074, 55075},
-    '2012-02-03'),
-KTuple('jup293.bsp',
-    '1900-01-18T00:00:09', '2099-12-17T23:59:58',
-    {3, 5, 10, 399, 599, 55076},
-    '2012-09-07'),
-KTuple('jup294.bsp',
-    '1900-02-04T00:00:09', '2099-12-14T23:59:58',
-    {3, 5, 10, 399, 599, 55072, 55073, 55074, 55075},
-    '2012-10-25'),
-KTuple('jup300.bsp',
-    '1900-01-12T00:00:09', '2099-12-31T23:59:58',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     599, 55060, 55061, 55062, 55063, 55064, 55065, 55066, 55067, 55068, 55069,
-     55070, 55071, 55072, 55073, 55074, 55075, 55076},
-    '2013-10-15'),
-KTuple('jup309.bsp',
-    '1900-01-01T00:00:09', '2099-12-31T23:59:58',
-    {501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2013-09-06'),
-KTuple('jup310_2004.bsp',
-    '2004-01-01T00:00:00', '2005-01-01T00:00:00',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2013-11-15'),
-KTuple('jup310_2018.bsp',
-    '2018-01-01T00:00:00', '2019-01-01T00:00:00',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2013-11-15'),
-KTuple('jup310_2021.bsp',
-    '2021-01-01T00:00:00', '2022-01-01T00:00:00',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2013-11-15'),
-KTuple('jup310xl.bsp',
-    '1600-01-09T23:59:27.816', '2600-01-04T23:58:50.816',
-    {501, 502, 503, 504, 505, 599},
-    '2016-06-29'),
-KTuple('jup310.bsp',
-    '1900-01-01T00:00:09', '2099-12-31T23:59:58',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2013-11-15'),
-KTuple('jup329.bsp',
-    '1900-01-12T00:00:09', '2099-12-31T23:59:58',
-    {3, 5, 10, 399, 551, 552, 553, 599},
-    '2015-03-09'),
-KTuple('jup341.bsp',
-    '1900-01-01T00:00:09', '2200-01-01T00:00:00',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     551, 552, 553, 554, 555, 556, 557, 558, 559, 599, 55060, 55061, 55062,
-     55064, 55065, 55066, 55068, 55070, 55071, 55074},
-    '2017-09-28'),
-KTuple('jup343.bsp',
-    '1800-01-01T00:00:09', '2200-01-01T00:00:00',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565,
-     566, 567, 568, 569, 570, 571, 572, 599, 55501, 55502, 55503, 55504, 55505,
-     55506, 55507},
-    '2019-11-06'),
-KTuple('jup344-s2003_j24.bsp',
-    '1800-01-04T23:59:27.816', '2200-12-21T23:58:50.816',
-    {3, 5, 10, 399, 599, 55508},
-    '2021-11-18'),
-KTuple('jup344.bsp',
-    '1799-12-26T23:59:27.816', '2200-01-04T23:58:50.816',
-    {3, 5, 10, 399, 506, 507, 508, 509, 510, 511, 512, 513, 517, 518, 519, 520,
-     521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535,
-     536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550,
-     551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565,
-     566, 567, 568, 569, 570, 571, 572, 599, 55501, 55502, 55503, 55504, 55505,
-     55506, 55507},
-    '2021-01-07'),
-KTuple('jup365.bsp',
-    '1600-01-09T23:59:27.816', '2200-01-09T23:58:50.816',
-    {3, 5, 10, 399, 501, 502, 503, 504, 505, 514, 515, 516, 599},
-    '2021-01-14'),
-]
+    FRAME_IDS[body_name] = frame_id
+    FRAME_CENTERS[frame_id] = body_id
 
-spk = spicefunc('spk', pattern=r'jup(\d\d\d).*\.bsp', title='Jupiter system SPKs',
-                tuples=_JUPITER_KTUPLES, exclusive=False, bodies=ALL_IDS)
+del body_id, body_name, frame_id, frame_name, found
+
+##########################################################################################
+# SPKs
+##########################################################################################
+
+from ._JUPITER_SPKS import _JUPITER_SPKS
+
+spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
+
+rule = Rule(r'jup(NNN).*\.bsp', source=spk_source, dest='Jupiter/SPK', planet=NAME,
+            family='Jupiter-SPK')
+
+default_body_ids = {False: SYSTEM, True: ALL_IDS}
+
+spk_docstrings = {'irregular': """\
+        irregular   True to include Jupiter's irregular satellites in the returned Kernel
+                    object. Otherwise, unless a list of NAIF IDs is explicitly provided,
+                    the returned Kernel will only cover Jupiter's inner satellites.
+"""}
+
+spk = spicefunc('spk', title='Jupiter satellite SPK',
+                known=_JUPITER_SPKS,
+                unknown=rule.pattern, source=spk_source,
+                sort=_spk_sort_key,
+                exclude=False, reduce=True,
+                default_ids=default_body_ids, default_ids_key=('irregular',),
+                default_properties={'irregular': False},
+                docstrings=spk_docstrings)
+
+del spk_source, rule, default_body_ids, spk_docstrings
+del spicefunc, _SOURCE, _spk_sort_key
 
 ##########################################################################################

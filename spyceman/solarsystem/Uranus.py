@@ -1,188 +1,118 @@
 ##########################################################################################
-# spyceman/planets/uranus.py: Kernel management for the Uranus system
-#
-# Kernel info last updated 3/19/23
+# spyceman/planets/Uranus.py: Kernel management for the Uranus system
 ##########################################################################################
 """\
-spyceman.planets.uranus: Support for Uranus-specific kernels.
+Support for Uranus-specific kernels. Last updated 2024-02-01.
 
 The following attributes are defined:
 
+NAME            "URANUS".
 ALL_MOONS       the set of all IDs for Uranus's moons, including aliases.
 CLASSICAL       the set of IDs of Miranda through Oberon.
 SMALL_INNER     the set of IDs of the small inner moons.
 REGULAR         the set of IDs of the regular Uranian moons.
 IRREGULAR       the set of IDs of the Uranian irregular satellites.
 UNNAMED         the set of IDs of moons that are not yet officially named.
-ID              the NAIF ID of Uranus.
+BODY_ID         the body ID of Uranus.
 SYSTEM          the set of IDs of the planet and all inner or classical moons.
 ALL_IDS         the set of IDs of the planet and all moons.
 BARYCENTER      the NAIF ID of the Uranus system barycenter.
+BODY_IDS        dictionary that maps every body name to its body ID.
+BODY_NAMES      dictionary that maps every body ID to its name.
+
+FRAME_ID        the NAIF ID of the Uranus rotation frame.
+FRAME_IDS       dictionary that maps every body name to its frame ID.
+FRAME_CENTERS   dictionary that maps every frame ID to the body ID of its center.
+
+The following functions are defined:
+
 spk()           function returning a Kernel object derived from one or more Uranus SPK
                 files.
 """
 
-from spyceman import CSPYCE, KTuple, spicefunc
+import warnings
 
-def srange(*args):
-    return set(range(*args))
+from spyceman.rule        import Rule
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
+from spyceman.spicefunc   import spicefunc
+from spyceman._cspyce     import CSPYCE
+
+##########################################################################################
+# Body IDs
+##########################################################################################
+
+NAME       = 'URANUS'
+BODY_ID    = 799
+BARYCENTER = BODY_ID // 100
+BODY_IDS   = {NAME: BODY_ID, 'BARYCENTER': BARYCENTER, NAME + ' BARYCENTER': BARYCENTER}
+BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
+
+ALL_MOONS = _srange(701, 728)
+for body_id in ALL_MOONS:
+    body_name, found = CSPYCE.bodc2n(body_id)
+    if found:
+        BODY_IDS[body_name] = body_id
+        BODY_NAMES[body_id] = body_name
+    else:
+        warnings.warn('name not identified for body ' + repr(body_id))
 
 # Categorize moons
-CLASSICAL   = srange(701, 706)                      # Miranda-Oberon
-SMALL_INNER = srange(706, 716) | {725, 726, 727}
-IRREGULAR   = srange(716, 725)
-ALL_MOONS   = srange(701, 728)
-UNNAMED     = set()
-REGULAR     = ALL_MOONS - IRREGULAR
+CLASSICAL = _srange(701, 706)               # Miranda through Oberon
+SMALL_INNER = _srange(706, 716) | {725, 726, 727}
+REGULAR = CLASSICAL | SMALL_INNER
+IRREGULAR = ALL_MOONS - REGULAR
+UNNAMED = set()
 
-ID          = 799
-SYSTEM      = {ID} | CLASSICAL | SMALL_INNER
-ALL_IDS     = {ID} | ALL_MOONS
-BARYCENTER  = 7
+SYSTEM  = {BODY_ID} | CLASSICAL | SMALL_INNER
+ALL_IDS = {BODY_ID} | ALL_MOONS
+
+del _srange, body_id, body_name, found
 
 ##########################################################################################
-# Managed list of known URAnnn SPK kernels
+# Frame IDs
 ##########################################################################################
 
-SPK_INFO = [
+FRAME_ID, frame_name, found = CSPYCE.cidfrm(NAME)
+FRAME_IDS = {NAME: FRAME_ID}
+FRAME_CENTERS = {FRAME_ID: BODY_ID}
+for body_name, body_id in BODY_IDS.items():
+    frame_id, frame_name, found = CSPYCE.cidfrm(body_id)
+    if not found:
+        frame_id = body_id      # if not already defined, use the body ID as the frame ID
 
-KTuple('ura027-3.bsp',
-    '1980-01-02T00:00:00', '2025-01-03T23:59:55',
-    {3, 7, 10, 399, 701, 702, 703, 704, 705, 799},
-    '2002-06-27'),
-KTuple('ura031.bsp',
-    '1990-01-01T00:00:00', '1999-12-31T23:59:58',
-    {3, 7, 10, 301, 399, 701, 702, 703, 704, 705, 799},
-    '1997-01-29'),
-KTuple('ura032.bsp',
-    '1994-01-01T00:00:00', '1998-12-31T23:59:58',
-    {3, 7, 10, 399, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 799},
-    '1994-11-19'),
-KTuple('ura033.bsp',
-    '1995-12-31T23:58:58.816', '2000-01-03T23:58:55.816',
-    {3, 7, 10, 301, 399, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 799},
-    '1996-04-05'),
-KTuple('ura039m.bsp',
-    '1997-12-31T23:58:56.816', '2009-12-31T23:58:53.816',
-    {706, 707, 708, 709, 710, 711, 712, 713, 714, 715},
-    '1998-03-26'),
-KTuple('ura039.bsp',
-    '1969-12-31T23:59:27.816', '2009-12-31T23:58:53.816',
-    {706, 707, 708, 709, 710, 711, 712, 713, 714, 715},
-    '1998-03-26'),
-KTuple('ura042.bsp',
-    '1984-02-29T23:59:05.815', '2010-01-02T23:58:53.816',
-    {3, 7, 10, 301, 399, 716, 717, 799},
-    '1994-06-16'),
-KTuple('ura045.bsp',
-    '1984-02-29T23:59:05.815', '2010-01-02T23:58:53.816',
-    {3, 7, 10, 301, 399, 716, 717, 799},
-    '1999-03-11'),
-KTuple('ura063.bsp',
-    '1995-01-01T23:58:58.816', '2024-12-31T23:58:50.816',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 799},
-    '2002-06-27'),
-KTuple('ura064.bsp',
-    '1995-01-01T23:58:58.816', '2024-12-31T23:58:50.816',
-    {3, 7, 10, 399, 721, 799},
-    '2002-10-01'),
-KTuple('ura071.bsp',
-    '1980-01-02T00:00:00', '2025-01-01T23:59:56',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2005-07-27'),
-KTuple('ura072.bsp',
-    '1980-01-02T00:00:00', '2024-12-31T23:59:56',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2005-12-21'),
-KTuple('ura074.bsp',
-    '1985-12-31T23:59:04.816', '2009-12-31T23:58:53.816',
-    {725, 726, 727, 799},
-    '2006-04-06'),
-KTuple('ura083.bsp',
-    '1950-01-01T00:00:09', '2049-12-31T23:59:56',
-    {3, 7, 10, 399, 701, 702, 703, 704, 705, 799},
-    '2007-08-01'),
-KTuple('ura086.bsp',
-    '1999-12-31T23:58:55.816', '2050-12-31T23:58:50.816',
-    {706, 707, 708, 709, 710, 711, 712, 713, 714, 715},
-    '2007-09-07'),
-KTuple('ura090_1.bsp',
-    '1900-01-01T00:00:09', '2050-12-31T23:59:57',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2008-08-27'),
-KTuple('ura090.bsp',
-    '1900-01-01T00:00:09', '2050-12-31T23:59:57',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2008-08-27'),
-KTuple('ura091-rocks-merge.bsp',
-    '1900-01-04T00:00:09', '2099-12-22T23:59:58',
-    {3, 7, 10, 399, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 725, 726,
-     727, 799},
-    '2013-12-12'),
-KTuple('ura091.bsp',
-    '1949-12-31T23:59:27.816', '2049-12-31T23:58:50.816',
-    {706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 725, 726, 727},
-    '2009-08-26'),
-KTuple('ura095.bsp',
-    '1900-01-03T00:00:09', '2099-12-23T23:59:57',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2010-10-21'),
-KTuple('ura111xl-701.bsp',
-    -441797371200.0, 473354280000.0,
-    {701},
-    '2022-03-16'),
-KTuple('ura111xl-702.bsp',
-    -441797371200.0, 473354280000.0,
-    {702},
-    '2022-03-16'),
-KTuple('ura111xl-703.bsp',
-    -441797371200.0, 473354280000.0,
-    {703},
-    '2022-03-16'),
-KTuple('ura111xl-704.bsp',
-    -441797371200.0, 473354280000.0,
-    {704},
-    '2022-03-16'),
-KTuple('ura111xl-705.bsp',
-    -441797371200.0, 473354280000.0,
-    {705},
-    '2022-03-16'),
-KTuple('ura111xl-799.bsp',
-    -441797371200.0, 473354280000.0,
-    {799},
-    '2022-03-16'),
-KTuple('ura111l.bsp',
-    '1600-01-09T23:59:27.816', '2399-12-30T23:58:50.816',
-    {3, 7, 10, 399, 701, 702, 703, 704, 705, 799},
-    '2022-03-16'),
-KTuple('ura111.xl.bsp',
-    '1599-12-06T23:59:27.817', '2600-01-12T23:58:50.816',
-    {701, 702, 703, 704, 705, 799},
-    '2016-06-29'),
-KTuple('ura111.bsp',
-    '1900-01-01T00:00:09', '2099-12-23T23:59:58',
-    {3, 7, 10, 399, 701, 702, 703, 704, 705, 799},
-    '2014-01-08'),
-KTuple('ura112.bsp',
-    '1900-01-01T00:00:09', '2099-12-23T23:59:58',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2014-01-08'),
-KTuple('ura115.bsp',
-    '1979-12-31T23:59:09.816', '2059-12-31T23:58:50.816',
-    {3, 7, 10, 399, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 725, 726,
-     727, 799},
-    '2019-09-12'),
-KTuple('ura116xl.bsp',
-    -473352379200.0, 473353848000.0,
-    {716, 717, 718, 719, 720, 721, 722, 723, 724},
-    '2022-03-25'),
-KTuple('ura116.bsp',
-    '1599-12-13T23:59:27.816', '2599-12-26T23:58:50.816',
-    {3, 7, 10, 399, 716, 717, 718, 719, 720, 721, 722, 723, 724, 799},
-    '2021-09-29'),
-]
+    FRAME_IDS[body_name] = frame_id
+    FRAME_CENTERS[frame_id] = body_id
 
-spk = make_func('spk', pattern=r'ura(\d\d\d).*\.bsp', fnmatch='ura*.bsp',
-                       info=SPK_INFO, extras=[], exclusive=False, bodies=ALL_MOONS | {ID})
+del body_id, body_name, frame_id, frame_name, found
+
+##########################################################################################
+# SPKs
+##########################################################################################
+
+from ._URANUS_SPKS import _URANUS_SPKS
+
+spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
+
+rule = Rule(r'ura(NNN).*\.bsp', source=spk_source, dest='Uranus/SPK', planet=NAME,
+            family='Uranus-SPK')
+
+default_body_ids = {False: SYSTEM, True: ALL_IDS}
+
+spk_docstrings = {'irregular': """\
+        irregular   True to include Uranus's irregular satellites in the returned Kernel
+                    object. Otherwise, unless a list of NAIF IDs is explicitly provided,
+                    the returned Kernel will only cover Uranus's inner satellites.
+"""}
+
+spk = spicefunc('spk', title='Uranus satellite SPK',
+                known=_URANUS_SPKS,
+                unknown=rule.pattern, source=spk_source,
+                sort=_spk_sort_key,
+                exclude=False, reduce=True,
+                default_ids=default_body_ids, default_ids_key=('irregular',),
+                propnames=('irregular',), docstrings=spk_docstrings)
+
+del rule, spk_source, default_body_ids, spk_docstrings
+del spicefunc, _SOURCE, _spk_sort_key
 
 ##########################################################################################

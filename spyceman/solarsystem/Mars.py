@@ -1,119 +1,133 @@
 ##########################################################################################
-# spyceman/planets/mars.py: Kernel management for the Mars system
-#
-# Kernel info last updated 3/19/23
+# spyceman/planets/Mars.py: Kernel management for the Mars system
 ##########################################################################################
 """\
-spyceman.planets.mars: Support for Mars-specific kernels.
+Support for Mars-specific kernels. Last updated 2024-02-01.
 
 The following attributes are defined:
 
-ALL_MOONS       the set of all IDs for Mars's moons, including aliases.
-CLASSICAL       a set with the IDs of Phobos and Deimos.
-SMALL_INNER     the set of IDs of the small moons, same as CLASSICAL.
-REGULAR         the set of IDs of the regular satellites, same as CLASSICAL.
-IRREGULAR       the set of IDs of the irregular satellites, currently empty.
+NAME            "MARS".
+ALL_MOONS       the set of all IDs for the Martian moons, including aliases.
+CLASSICAL       the set of IDs of the "classical" satellites, Phobos and Deimos.
+SMALL_INNER     the set of IDs of the small inner moons; same as CLASSICAL.
+REGULAR         the set of IDs of the regular satellites; same as CLASSICAL.
+IRREGULAR       the set of IDs of the Martian irregular satellites.
 UNNAMED         the set of IDs of moons that are not yet officially named.
-ID              the NAIF ID of Mars.
+BODY_ID         the NAIF ID of Mars.
 SYSTEM          the set of IDs of the planet and all inner or classical moons.
-ALL_IDS         the set of IDs of the planet and all moons.
+ALL_IDS         the set of IDs of the planet and all moons, including their aliases.
 BARYCENTER      the NAIF ID of the Mars system barycenter.
-spk()           a Kernel object derived from one or more Mars SPK files.
-pck()           a Kernel object derived from one or more Mars PCK files
+BODY_IDS        dictionary that maps every body name to its body ID.
+BODY_NAMES      dictionary that maps every body ID to its name.
+
+FRAME_ID        the NAIF ID of the Mars rotation frame.
+FRAME_IDS       dictionary that maps every body name to its frame ID.
+FRAME_CENTERS   dictionary that maps every frame ID to the body ID of its center.
+
+The following functions are defined:
+
+pck()           function returning a Kernel object derived from one or more Mars-specific
+                PCK files.
+spk()           function returning a Kernel object derived from one or more Mars SPK
+                files.
 """
 
-from spyceman import CSPYCE, KTuple, spicefunc
+import warnings
+
+from spyceman.kernelfile  import KernelFile
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
+from spyceman.spicefunc   import spicefunc
+from spyceman.rule        import Rule
+from spyceman._cspyce     import CSPYCE
+
+##########################################################################################
+# Body IDs
+##########################################################################################
+
+NAME       = 'MARS'
+BODY_ID    = 499
+BARYCENTER = BODY_ID // 100
+BODY_IDS   = {NAME: BODY_ID, 'BARYCENTER': BARYCENTER, NAME + ' BARYCENTER': BARYCENTER}
+BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
+
+ALL_MOONS = _srange(401, 403)
+for body_id in ALL_MOONS:
+    body_name, found = CSPYCE.bodc2n(body_id)
+    if found:
+        BODY_IDS[body_name] = body_id
+        BODY_NAMES[body_id] = body_name
+    else:
+        warnings.warn('name not identified for body ' + repr(body_id))
 
 # Categorize moons
-CLASSICAL   = {401, 402}
+CLASSICAL   = ALL_MOONS
 SMALL_INNER = CLASSICAL
 REGULAR     = CLASSICAL
 IRREGULAR   = set()
-ALL_MOONS   = CLASSICAL
 UNNAMED     = set()
 
-ID          = 499
-SYSTEM      = {ID} | CLASSICAL
-ALL_IDS     = {ID} | ALL_MOONS
-BARYCENTER  = 4
+SYSTEM  = {BODY_ID} | CLASSICAL | SMALL_INNER
+ALL_IDS = {BODY_ID} | ALL_MOONS
+
+del _srange, body_id, body_name, found
 
 ##########################################################################################
-# Managed list of known MARnnn SPK kernels
+# Frame IDs
 ##########################################################################################
 
-SPK_INFO = [
+FRAME_ID, frame_name, found = CSPYCE.cidfrm(NAME)
+FRAME_IDS = {NAME: FRAME_ID}
+FRAME_CENTERS = {FRAME_ID: BODY_ID}
+for body_name, body_id in BODY_IDS.items():
+    frame_id, frame_name, found = CSPYCE.cidfrm(body_id)
+    if not found:
+        frame_id = body_id      # if not already defined, use the body ID as the frame ID
 
-KTuple('mar022-1.bsp',
-    '1971-09-30T23:59:27.818', '1972-09-30T23:59:16.818',
-    {3, 4, 10, 399, 401, 402, 499},
-    '1999-09-05'),
-KTuple('mar022-LONG.bsp',
-    '1976-05-31T23:59:12.815', '2026-01-01T23:58:50.816',
-    {3, 4, 10, 301, 399, 401, 402, 499},
-    '1995-08-29'),      # was 1989-03-02
-KTuple('mar033-7.bsp',
-    '1976-06-01T00:00:00', '2025-01-11T23:57:54',
-    {3, 4, 10, 399, 401, 402, 499},
-    '1997-06-19'),
-KTuple('mar063.bsp',
-    '1962-12-03T00:00:09', '2050-01-02T23:59:56',
-    {3, 4, 10, 399, 401, 402, 499},
-    '2007-08-14'),
-KTuple('mar080.bsp',
-    '1900-01-04T00:00:09', '2051-01-01T23:59:57',
-    {3, 4, 10, 399, 401, 402, 499},
-    '2008-04-01'),
-KTuple('mar085.bsp',
-    '1900-01-04T00:00:09', '2051-01-01T23:59:57',
-    {3, 4, 10, 399, 401, 402, 499},
-    '2008-04-01'),
-KTuple('mar097.1600-1900.bsp',
-    '1599-12-31T23:59:27.816', '1900-01-07T23:59:27.816',
-    {401, 402, 499},
-    '2016-06-29'),
-KTuple('mar097.1900-2100.bsp',
-    '1900-01-03T23:59:27.816', '2100-01-02T23:58:50.816',
-    {401, 402, 499},
-    '2016-06-29'),
-KTuple('mar097.2100-2600.bsp',
-    '2099-12-31T23:58:50.816', '2600-01-03T23:58:50.816',
-    {401, 402, 499},
-    '2016-06-29'),
-KTuple('mar097.bsp',
-    '1900-01-04T00:00:09', '2099-12-31T23:59:58',
-    {3, 4, 10, 399, 401, 402, 499},
-    '2011-05-24'),
-]
+    FRAME_IDS[body_name] = frame_id
+    FRAME_CENTERS[frame_id] = body_id
 
-spk = make_func('spk', pattern=r'mar(\d\d\d).*\.bsp', fnmatch='mar*.bsp',
-                info=SPK_INFO, extras=[], bodies=ALL_MOONS | {ID}, exclusive=False)
+del body_id, body_name, frame_id, frame_name, found
 
 ##########################################################################################
-# Managed list of known Mars PCK kernels
+# SPKs
 ##########################################################################################
 
-PCK_INFO = [
+from ._MARS_SPKS import _MARS_SPKS
 
-KTuple('mars_iau2000_v0.tpc',
-    None, None,
-    {4, 401, 402, 499},
-    '2001-12-11'),
-KTuple('mars_iau2000_v1.tpc',
-    None, None,
-    {4, 401, 402, 499},
-    '2023-01-18'),
-]
+spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
 
-# According to comments in mars_iau2000_v1.tpc, both pck00011.tpc and
-# pck00011_n0066.tpc are incompatible with mars_iau2000_v0.tpc. In other
-# regards, the v0 and v1 files are functionally identical.
+rule = Rule(r'mar(NNN).*\.bsp', source=spk_source, dest='Mars/SPK', planet=NAME,
+            family='Mars-SPK')
 
-# This prevents the incompatibility from ever arising. However, note that the
-# unloading of pck00011 might be an unexpected side-effect of loading _v0.
-# Still, it is for the user's own protection.
-KernelFile.globally_exclude(r'pck00011.*\.tpc', 'mars_iau2000_v0.tpc')
+spk = spicefunc('spk', title='Mars satellite SPK',
+                known=_MARS_SPKS,
+                unknown=rule.pattern, source=spk_source,
+                sort=_spk_sort_key,
+                exclude=False, reduce=True,
+                default_ids=ALL_IDS)
 
-pck = make_func('pck', pattern=r'mars_iau2000_v(\d)\.tpc', fnmatch='mars_iau2000_v*.tpc',
-                       info=PCK_INFO, extras=[], exclusive=True, bodies=ALL_MOONS | {ID})
+del spk_source, rule, _spk_sort_key
+
+##########################################################################################
+# PCKs
+##########################################################################################
+
+from ._MARS_PCKS import _MARS_PCKS
+
+pck_source = (_SOURCE + 'pck', _SOURCE + 'pck/a_old_versions')
+
+rule = Rule(r'mars_iau2000_v(N+).*\.bsp', source=pck_source, dest='Mars/PCK', planet=NAME,
+            family='Mars-IAU2000-PCK')
+KernelFile.mutual_veto(rule.pattern)        # never more than one furnished
+
+pck = spicefunc('pck', title='Mars PCK',
+                known=_MARS_PCKS,
+                unknown=rule.pattern, source=pck_source,
+                sort='version',
+                exclude=True,
+                default_ids=ALL_IDS)
+
+del pck_source, rule
+del spicefunc, _SOURCE
 
 ##########################################################################################
