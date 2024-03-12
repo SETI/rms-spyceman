@@ -214,7 +214,7 @@ del rule, sclk_notes
 
 def meta(planet=None, instrument=None, *, irregular=False,
          tmin=None, tmax=None, ids=None,
-         ck={}, fk={}, ik={}, sclk={}, spk={}):
+         ck={}, fk={}, ik={}, sclk={}, spk={}, **keywords):
     """A metakernel object for the Cassini mission or any subset thereof.
 
     Input:
@@ -227,15 +227,21 @@ def meta(planet=None, instrument=None, *, irregular=False,
         ck, fk, ik, sclk, spk
                     optional dictionaries listing any non-default inputs to one of the
                     Cassini kernel functions of the same name.
+        name=value  any additional input that applies to each of the function calls.
     """
 
     # _meta avoids the name conflicts between ck the input and ck the function, etc.
     return _meta(planet=planet, instrument=instrument, irregular=irregular,
                  tmin=tmin, tmax=tmax, ids=ids,
-                 ck_=ck, fk_=fk, ik_=ik, sclk_=sclk, spk_=spk)
+                 ck_=ck, fk_=fk, ik_=ik, sclk_=sclk, spk_=spk, **keywords)
 
 def _meta(*, planet, instrument, irregular, tmin, tmax, ids,
-          ck_, fk_, ik_, pck_, sclk_, spk_):
+          ck_, fk_, ik_, pck_, sclk_, spk_, **keywords):
+
+    for dict_ in (ck_, fk_, ik_, pck_, sclk_, spk_):
+        for k,v in keywords.items():
+            if k not in dict_:
+                dict_[k] = v
 
     ck_   = ck(planet=planet, instrument=instrument,
                tmin=tmin, tmax=tmax, ids=ids, **ck_)

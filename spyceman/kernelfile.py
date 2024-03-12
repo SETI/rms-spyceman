@@ -811,7 +811,7 @@ class KernelFile(Kernel):
         raise ValueError('invalid sort option: ' + repr(option))
 
     ######################################################################################
-    # Veto and superseder management
+    # Veto and shadow management
     ######################################################################################
 
     # These are lists of lists of compiled regular expressions. If the first item in each
@@ -820,12 +820,15 @@ class KernelFile(Kernel):
     # subsequent items, which are stored as tuples (string, flags) instead of compiled
     # expressions.
     _VETOS = []
-    _SUPERSEDERS = []
+    _SHADOWS = []
 
     @staticmethod
     def mutual_veto(*patterns, flags=re.IGNORECASE):
         """Ensure that if a kernel is furnished whose basename matches one of the given
-        patterns, any overlapping kernel matching onee of the patterns will be unloaded.
+        patterns, any overlapping kernel matching one of the patterns will be unloaded.
+
+        A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
+        Vetos apply globally, taking effect any time a basename is furnished.
         """
 
         patterns = KernelFile._compile(patterns, flags=flags, subs=False)
@@ -841,6 +844,9 @@ class KernelFile(Kernel):
         will be unloaded.
 
         Multiple patterns can be specified inside a tuple, list, or set.
+
+        A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
+        Vetos apply globally, taking effect any time a basename is furnished.
         """
 
         patterns = [KernelFile._compile(p, flags=flags, subs=False) for p in patterns]
@@ -860,12 +866,15 @@ class KernelFile(Kernel):
     @staticmethod
     def veto(patterns, *vetos, flags=re.IGNORECASE):
         """Ensure that if a kernel is furnished whose basename matches the first pattern,
-        any overlapping kernel whose name matches one of the veto pattern will be
+        any overlapping kernel whose name matches one of the veto patterns will be
         unloaded.
 
         Multiple patterns can be specified inside a tuple, list, or set. If the first
         input contains capturing sequences, these can be referenced in the remaining
         patterns.
+
+        A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
+        Vetos apply globally, taking effect any time a basename is furnished.
         """
 
         patterns = KernelFile._compile(patterns, flags=flags, subs=False)
@@ -876,22 +885,22 @@ class KernelFile(Kernel):
             KernelFile._VETOS.append([pattern] + vetos)
 
     @staticmethod
-    def supersede(above, *below, flags=re.IGNORECASE):
+    def shadow(front, *behind, flags=re.IGNORECASE):
         """Ensure that if a kernel is furnished whose basename matches the first pattern,
-        it will be furnished at a higher precedence than any overlapping kernel already
-        furnished whose basename matches the second pattern.
+        it will be furnished at a higher precedence than any overlapping kernel whose
+        basename matches the second or subsequent patterns.
 
-        Multiple "above" patterns can be specified inside a tuple, list, or set. If this
-        input contains capturing sequences, these can be referenced in the "below"
+        Multiple "front" patterns can be specified inside a tuple, list, or set. If this
+        input contains capturing sequences, these can be referenced in the "behind"
         patterns.
         """
 
-        above = KernelFile._compile(above, flags=flags)
-        below = KernelFile._compile(below, flags=flags)
+        front  = KernelFile._compile(front,  flags=flags)
+        behind = KernelFile._compile(behind, flags=flags)
             # Each is a list of patterns
 
-        for pattern in above:
-            KernelFile._SUPERSEDERS.append([pattern] + below)
+        for pattern in front:
+            KernelFile._SHADOWS.append([pattern] + behind)
 
     @staticmethod
     def _compile(patterns, flags=re.IGNORECASE, subs=False):
@@ -922,7 +931,7 @@ class KernelFile(Kernel):
         return result
 
     @staticmethod
-    def _get_vetos_or_superseders(basename, source):
+    def _get_vetos_or_shadows(basename, source):
         """The list of compiled regular expressions that match this basename."""
 
         matches = []
@@ -942,14 +951,13 @@ class KernelFile(Kernel):
     def _get_vetos(basename):
         """The list of compiled regular expressions that this basename vetos."""
 
-        return KernelFile._get_vetos_or_superseders(basename, source=KernelFile._VETOS)
+        return KernelFile._get_vetos_or_shadows(basename, source=KernelFile._VETOS)
 
     @staticmethod
-    def _get_superseders(basename):
-        """The list of compiled regular expressions that this basename supersedes."""
+    def _get_shadows(basename):
+        """The list of compiled regular expressions that this basename shadows."""
 
-        return KernelFile._get_vetos_or_superseders(basename,
-                                                    source=KernelFile._SUPERSEDERS)
+        return KernelFile._get_vetos_or_shadows(basename, source=KernelFile._SHADOWS)
 
 ##########################################################################################
 # Include the _localfiles functions as class methods

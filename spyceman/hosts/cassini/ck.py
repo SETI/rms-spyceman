@@ -65,12 +65,12 @@ Rule(r'(YYMMDD)_(YYMMDD)(|r[ab])\.bc', family='Cassini-Jupiter-CK',
 
 # These five files in _JUPITER_CKS are overrides of version=1 kernels and are specific
 # to version 2.
-jupiter_ck_superseders = [('001113_001116ra.bc', '001113_001118ra.bc'),
-                          ('001129_001130ra.bc', '001123_001130ra.bc'),
-                          ('001213_001213ra.bc', '001213_001215ra.bc'),
-                          ('010121_010122ra.bc', '010121_010123ra.bc'),
-                          ('010123_010124ra.bc', '010123_010128ra.bc')]
-for basename, _ in jupiter_ck_superseders:
+jupiter_ck_shadows = [('001113_001116ra.bc', '001113_001118ra.bc'),
+                      ('001129_001130ra.bc', '001123_001130ra.bc'),
+                      ('001213_001213ra.bc', '001213_001215ra.bc'),
+                      ('010121_010122ra.bc', '010121_010123ra.bc'),
+                      ('010123_010124ra.bc', '010123_010128ra.bc')]
+for basename, _ in jupiter_ck_shadows:
     KernelFile(basename, version=2)
 
 # This pattern will match any "reconstructed" CK; version=3
@@ -102,12 +102,12 @@ jupiter_ck = spicefunc('jupiter_ck', title='Cassini Jupiter CKs',
             known=_JUPITER_CKS + _RECONSTRUCTED_CKS,
             sort=jupiter_ck_sort_key,
             exclude=False, reduce=False,
-            superseders=jupiter_ck_superseders,
+            shadows=jupiter_ck_shadows,
             default_times=('2000-10-01', '2001-04-01'),
             default_ids=None,           # to match any Cassini frame ID
             notes=jupiter_ck_notes)
 
-del basename, jupiter_ck_superseders, jupiter_ck_sort_key, jupiter_ck_notes
+del basename, jupiter_ck_shadows, jupiter_ck_sort_key, jupiter_ck_notes
 
 ##########################################################################################
 # General CKs

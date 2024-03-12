@@ -405,44 +405,45 @@ class Kernel(object):
                     diff_ktype_set.add(kernel)
 
     ######################################################################################
-    # Superseders
+    # Shadows
     ######################################################################################
 
-    def add_superseder(self, above, *below, flags=re.IGNORECASE):
+    def add_shadow(self, front, *behind, flags=re.IGNORECASE):
         """When furnishing this kernel, ensure that a file matching the first basename
         pattern will be furnished at a higher level of precedence than any basenames
         matching subsequent patterns.
 
-        Multiple "above" patterns can be specified inside a tuple, list, or set. If this
+        Multiple "front" patterns can be specified inside a tuple, list, or set. If this
         input contains capturing sequences, these can be referenced in the "below"
         patterns.
         """
 
-        if not hasattr(self, '_superseders'):
-            self._superseders = []
+        if not hasattr(self, '_shadows'):
+            self._shadows = []
 
-        above = Kernel.KernelFile._compile(above, flags=flags)
-        below = Kernel.KernelFile._compile(below, flags=flags)
+        front  = Kernel.KernelFile._compile(front,  flags=flags)
+        behind = Kernel.KernelFile._compile(behind, flags=flags)
             # Each is a list of patterns
 
-        for pattern in above:
-            self._superseders.append([pattern] + below)
+        for pattern in front:
+            self._shadows.append([pattern] + behind)
 
-    def add_superseders(self, tuples, flags=re.IGNORECASE):
-        """Add a list of superseder tuples to this kernel."""
+    def add_shadows(self, tuples, flags=re.IGNORECASE):
+        """Add a list of shadow tuples/lists to this kernel. Each tuple contains a "front"
+        pattern followed by one or "behind" patterns.""""
 
-        for above_below in tuples:
-            self.add_superseder(*above_below, flags=re.IGNORECASE)
+        for front_behind in tuples:
+            self.add_shadow(*front_behind, flags=flags)
 
-    def get_superseders(self, basename):
-        """The list of compiled regular expressions that this basename supersedes."""
+    def get_shadows(self, basename):
+        """The list of compiled regular expressions that this basename shadows."""
 
-        if hasattr(self, '_superseders'):
-            sources = self._superseders + Kernel.KernelFile._SUPERSEDERS
+        if hasattr(self, '_shadows'):
+            sources = self._shadows + Kernel.KernelFile._SHADOWS
         else:
-            sources = Kernel.KernelFile._SUPERSEDERS
+            sources = Kernel.KernelFile._SHADOWS
 
-        return Kernel.KernelFile._get_vetos_or_superseders(basename, sources)
+        return Kernel.KernelFile._get_vetos_or_shadows(basename, sources)
 
     ######################################################################################
     # Furnished kernel management
@@ -575,8 +576,8 @@ class Kernel(object):
 
             # Otherwise...
             else:
-                # Locate any superseded files
-                patterns = self.get_superseders(basename)
+                # Locate any shadowed files
+                patterns = self.get_shadows(basename)
                 locs = [minloc]
                 for pattern in patterns:
                     locs += [k for k,f in enumerate(furnished) if pattern.fullmatch(f)]

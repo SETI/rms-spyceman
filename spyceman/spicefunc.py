@@ -178,6 +178,9 @@ def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versio
         if kfiles:
             kfiles = kfiles[-1:]
 
+    # Identify unused basenames
+    unused_basenames = set(basenames) - {k.basename for k in kfiles}
+
     # Construct the kernel
     if not kfiles:
         return None
@@ -187,7 +190,9 @@ def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versio
     else:
         result = KernelSet(kfiles, ordered=func.ORDERED)
 
-    result.add_superseders(func.SUPERSEDERS)
+    # Add shadows and exclusions
+    result.add_shadows(func.SHADOWS)
+    result.exclude(unused_basenames)
 
     # Prerequisites and co-requisites
     for kernel in func.REQUIRE:
@@ -201,7 +206,7 @@ def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versio
 
 
 def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alpha',
-              exclude=False, reduce=False, ordered=False, superseders=[], require=(),
+              exclude=False, reduce=False, ordered=False, shadows=[], require=(),
               default_times=None, default_time_key=(),
               default_ids=None, default_id_key=(),
               default_properties={},
@@ -229,9 +234,9 @@ def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alp
                     later in the list will be eliminated from the returned Kernel object.
         ordered     True if the known files must be furnished in the order given; False if
                     they can be furnished in any order.
-        superseders optional list of superseder tuples (basename1, basename2, ...] for
-                    this kernel such that any file matching the first basename will have
-                    a higher precedence than any files matching subsequent basenames.
+        shadows     optional list of shadow tuples (basename1, basename2, ...] for this
+                    kernel such that any file matching the first basename will have a
+                    higher precedence than any files matching subsequent basenames.
         require     one or more prerequisite kernels for this kernel. If a function is
                     provided, that function is called using all the same inputs as this
                     function.
@@ -314,7 +319,7 @@ def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alp
     wrapper.SORT = sort
     wrapper.EXCLUDE = exclude
     wrapper.ORDERED = ordered
-    wrapper.SUPERSEDERS = superseders
+    wrapper.SHADOWS = shadows
     wrapper.REQUIRE = _input_set(require)
     wrapper.DEFAULT_TIMES = default_times or (None, None)
     wrapper.DEFAULT_TIME_KEY = _input_list(default_time_key)

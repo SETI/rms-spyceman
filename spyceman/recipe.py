@@ -8,6 +8,7 @@ import textkernel
 from spyceman.kernelfile  import KernelFile
 from spyceman.kernelstack import KernelStack
 from spyceman.metakernel  import Metakernel
+from spyceman.solarsystem import General
 from spyceman._ktypes     import _KTYPES
 
 import re
@@ -567,6 +568,7 @@ _wrap_func('_rename')
 _wrap_func('_used')
 
 # Always initialize with an empty Recipe named "default"
-_ = Recipe('default', [])
+default = Recipe('default', [])
+default += General.lsk(), General.pck()
 
 ##########################################################################################
