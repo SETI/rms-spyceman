@@ -38,7 +38,7 @@ class _KernelInfo(object):
     def __init__(self, basename):
         """Constructor for a _KernelInfo object.
 
-        Args:
+        Parameters:
             basename (str): The basename of a kernel file.
         """
 
@@ -89,7 +89,7 @@ class _KernelInfo(object):
     def lookup(basename):
         """The unique _KernelInfo object for this basename.
 
-        Args:
+        Parameters:
             basename (str): The basename of a kernel file.
 
         Return:
