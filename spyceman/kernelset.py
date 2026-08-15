@@ -16,14 +16,16 @@ class KernelSet(Kernel):
     def __init__(self, basenames, *, ordered=False, name=None):
         """Constructor.
 
-        Inputs:
-            basenames   list of kernel file basenames or KernelFiles to be included.
-            ordered     True to ensure that the load order among the basenames is
-                        preserved; False to allow the basenames within this KernelSet to
-                        be loaded in any order.
-            name        optional name string for this Kernel. If not provided, a name
-                        will be derived from the basenames and their family names. This
-                        string is entirely for user convenience and need not be unique.
+        Args:
+            basenames (xxx): List of kernel file basenames or KernelFiles to be included.
+            ordered (bool, optional):
+                True to ensure that the load order among the basenames is
+                preserved; False to allow the basenames within this KernelSet to
+                be loaded in any order.
+            name (xxx, optional):
+                Optional name string for this Kernel. If not provided, a name
+                will be derived from the basenames and their family names. This
+                string is entirely for user convenience and need not be unique.
         """
 
         self._ktype = KernelFile(basenames[0])._ktype

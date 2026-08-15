@@ -15,9 +15,9 @@ class KernelStack(Kernel):
     def __init__(self, kernels, *, name=''):
         """Constructor.
 
-        Inputs:
-            kernels     list of kernel objects.
-            name        optional name string for this KernelStack.
+        Args:
+            kernels (xxx): List of kernel objects.
+            name (str, optional): Optional name string for this KernelStack.
         """
 
         self._kernels = [Kernel.as_kernel(k) for k in kernels]
@@ -49,6 +49,9 @@ class KernelStack(Kernel):
         """The ordered list of basenames associated with this Kernel object.
 
         The list excudes pre-, post-, and co-requisites.
+
+        Returns:
+            xxx: xxx
         """
 
         if self._basenames is None:
@@ -69,7 +72,11 @@ class KernelStack(Kernel):
 
     @property
     def exclusions(self):
-        """The set of excluded kernel file basenames for this kernel."""
+        """The set of excluded kernel file basenames for this kernel.
+
+        Returns:
+            xxx: xxx
+        """
 
         if self._exclusions is None:
             for kernel in self._kernels:
@@ -84,6 +91,9 @@ class KernelStack(Kernel):
         A prerequisite kernels will always be furnished, but at lower precedence, when
         this kernel is furnished. Prerequisites are always of the same ktype as the given
         kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if self._prerequisites is None:
@@ -102,6 +112,9 @@ class KernelStack(Kernel):
         A post-requisite kernels will always be furnished, and at higher precedence, when
         this kernel is furnished. Post-requisites are always of the same ktype as the
         given kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if self._postrequisites is None:
@@ -116,6 +129,9 @@ class KernelStack(Kernel):
 
         A co-requisite kernels will always be furnished when this kernel is furnished.
         Co-requisites are always of a different ktype than the given kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if self._corequisites is None:
@@ -147,6 +163,8 @@ class KernelStack(Kernel):
 
         Return:         the index of the basename of the highest furnished basename.
         """
+#xxx Insert "*"?
+#xxx Unknown docstring format
 
         for kernel in self._kernels:
             minloc = Kernel.furnish(kernel, tmin=tmin, tmax=tmax, ids=ids, minloc=minloc)
@@ -165,6 +183,9 @@ class KernelStack(Kernel):
         Return          new location of the given index. The value will change for each
                         basename below this location that is unloaded.
         """
+#xxx Insert "*"?
+#xxx Unknown docstring format
+#xxx Unknown arg name: loc
 
         for kernel in self._kernels:
             refloc = Kernel.unload(kernel, tmin=tmin, tmax=tmax, ids=ids, refloc=refloc)
@@ -175,10 +196,13 @@ class KernelStack(Kernel):
         """The ordered list of kernel basenames that are or would be used for a given
         range of times and/or a set of NAIF IDs, including pre-, post-, and co-requisites.
 
-        Inputs:
-            tmin        earliest time in TDB seconds. Default is to ignore time.
-            tmax        latest time in TDB seconds. Default is to use the value of tmin.
-            ids         set of NAIF IDs that are required. Default is to ignore NAIF IDs.
+        Args:
+            tmin (xxx, optional): Earliest time in TDB seconds. Default is to ignore time.
+            tmax (xxx, optional): Latest time in TDB seconds. Default is to use the value of tmin.
+            ids (xxx, optional): Set of NAIF IDs that are required. Default is to ignore NAIF IDs.
+
+        Returns:
+            xxx: xxx
         """
 
         basenames = []

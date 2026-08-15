@@ -92,6 +92,14 @@ class _tkdict_desc(property):
 def _fix_args(rec=None, *args, **kwargs):
     """Internal function to munge input arguments depending on whether the first argument
     is a Recipe or the name of a Recipe.
+
+    Args:
+        rec (xxx, optional): Xxx
+        *args (xxx): Xxx
+        **kwargs (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     if isinstance(rec, Recipe):         # if first arg is a Recipe, leave it alone
@@ -116,6 +124,9 @@ def _wrap_func(funcname):
         Recipe.funcname(name, ...)
     it is applied to the Recipe having that name. If the name or instance is missing
     entirely, it applies to to the currently selected Recipe.
+
+    Args:
+        funcname (xxx): Xxx
     """
 
     def fix_signature(sig):
@@ -123,6 +134,12 @@ def _wrap_func(funcname):
 
         "(self, *, name=None)" -> "(self, name=name)"
         "(self, name=None)" -> "(self, name)"
+
+        Args:
+            sig (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         args = []
@@ -194,17 +211,21 @@ class Recipe:
     def __init__(self, name, kernels=[], reference=None, select=False):
         """Constructor for a Kernel Recipe.
 
-        Inputs:
-            name        name of this Recipe, which must be unique. Trailing blanks are
-                        stripped.
-            kernels     optional list of kernels to include, equivalent to:
-                            Kernel(name).append(*kernels)
-            reference   optional alternative Recipe or Recipe name. When this Recipe
-                        does not contain any Kernels of a particular ktype, the
-                        corresponding Kernels of the referenced Recipe's ktype are used
-                        instead.
-            select      True to make this the currently selected Recipe.
+        Args:
+            name (xxx):
+                Name of this Recipe, which must be unique. Trailing blanks are
+                stripped.
+            kernels (list, optional):
+                Optional list of kernels to include, equivalent to:
+                Kernel(name).append(*kernels)
+            reference (xxx, optional):
+                Optional alternative Recipe or Recipe name. When this Recipe
+                does not contain any Kernels of a particular ktype, the
+                corresponding Kernels of the referenced Recipe's ktype are used
+                instead.
+            select (bool, optional): True to make this the currently selected Recipe.
         """
+#xxx Insert "*"?
 
         name = Recipe._clean_name(name)
         if name in Recipe._RECIPES:
@@ -236,6 +257,9 @@ class Recipe:
             "recipe"   -> "recipe 2"
             "recipe 2" -> "recipe 3"
             etc.
+
+        Returns:
+            xxx: xxx
         """
 
         dup = Recipe(Recipe._unused_name(self._name), reference=self._reference)
@@ -256,6 +280,9 @@ class Recipe:
             Recipe.copy(name)   # a copy of the Recipe having the given name
             Recipe.copy()       # a copy of the currently selected Recipe
             Recipe.copy(None)   # same as above
+
+        Returns:
+            xxx: xxx
         """
 
         return self.__copy__()
@@ -265,6 +292,12 @@ class Recipe:
         """Name with trailing blanks stripped. If it ends with a blank followed by digits,
         duplicate blanks before the digits are collapsed into one and leading zeros are
         removed from the digits.
+
+        Args:
+            name (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if not isinstance(name, str):
@@ -283,6 +316,12 @@ class Recipe:
 
         Trailing blanks are stripped. Duplicate blanks before the digits are collapsed
         into one. Leading zeros are removed from the digits.
+
+        Args:
+            name (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         name = Recipe._clean_name(name)
@@ -336,6 +375,9 @@ class Recipe:
             Recipe.rename(name, newname)    # rename the Recipe having name to newname
             Recipe.rename(newname)          # rename the currently selected Recipe
             Recipe.rename(None, newname)    # same as above
+
+        Args:
+            name (xxx, optional): Xxx
         """
 
         name = Recipe._clean_name(name)
@@ -360,6 +402,9 @@ class Recipe:
             Recipe.append(name, kernel...)  # append kernel(s) to the Recipe having name
             Recipe.append(kernel...)        # append kernel(s) to the selected Recipe
             Recipe.append(None, kernel...)  # same as above
+
+        Args:
+            *kernels (xxx): Xxx
         """
 
         self._append_or_prepend(kernels, prepend=False)
@@ -374,6 +419,9 @@ class Recipe:
             Recipe.prepend(name, kernel...) # prepend kernel(s) to the Recipe with name
             Recipe.prepend(kernel...)       # prepend kernel(s) to the selected Recipe
             Recipe.prepend(None, kernel...) # same as above
+
+        Args:
+            *kernels (xxx): Xxx
         """
 
         self._append_or_prepend(kernels, prepend=True)
@@ -385,6 +433,10 @@ class Recipe:
         If prepend is True, the kernels will be prepended, meaning that they will be
         furnished at a lower precedence. If False, they will be furnished at a higher
         precedence.
+
+        Args:
+            kernels (xxx): Xxx
+            prepend (bool, optional): Xxx
         """
 
         # Convert to a list of kernels
@@ -436,6 +488,12 @@ class Recipe:
                 recipe += kernel
         or
                 recipe += [kernel, kernel, ...]
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         self._append(kernels)
@@ -452,6 +510,12 @@ class Recipe:
             rec.select()            # select rec, which is an instance of Recipe
             Recipe.select(rec)      # same as above
             Recipe.select(name)     # select the Recipe having the given name
+
+        Args:
+            rec (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if rec is None:
@@ -464,22 +528,38 @@ class Recipe:
 
     @_class_property
     def SELECTED(cls):
-        """The currently selected Recipe."""
+        """The currently selected Recipe.
+
+        Returns:
+            xxx: xxx
+        """
         return Recipe._RECIPES[Recipe._SELECTION]
 
     @_class_property
     def SEL(cls):
-        """Short name for the currently selected Recipe."""
+        """Short name for the currently selected Recipe.
+
+        Returns:
+            xxx: xxx
+        """
         return Recipe._RECIPES[Recipe._SELECTION]
 
     @_class_property
     def DEFAULT(cls):
-        """The default Recipe."""
+        """The default Recipe.
+
+        Returns:
+            xxx: xxx
+        """
         return Recipe._RECIPES['default']
 
     @_class_property
     def DEF(cls):
-        """Short name for the default Recipe."""
+        """Short name for the default Recipe.
+
+        Returns:
+            xxx: xxx
+        """
         return Recipe._RECIPES['default']
 
     @staticmethod
@@ -487,6 +567,12 @@ class Recipe:
         """Return the Recipe object with the specified name.
 
         If the input argument is already a Recipe object, it is returned.
+
+        Args:
+            key (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if isinstance(key, Recipe):
@@ -508,12 +594,13 @@ class Recipe:
             Recipe.furnish(...)         # furnish the currently selected Recipe
             Recipe.furnish(None, ...)   # same as above
 
-        Input:
-            tmin        lower time limit in seconds TDB; None for all times.
-            tmax        upper time limit in seconds TDB; None for all times.
-            time        alternative time input as a tuple (tmin,tmax).
-            ids         NAIF ID or set of NAIF IDs.
+        Args:
+            tmin (xxx, optional): Lower time limit in seconds TDB; None for all times.
+            tmax (xxx, optional): Upper time limit in seconds TDB; None for all times.
+            time (xxx): Alternative time input as a tuple (tmin,tmax).
+            ids (xxx, optional): NAIF ID or set of NAIF IDs.
         """
+#xxx Unknown arg name: time
 
         for ktype in _KTYPES:
             kernels = getattr(self, ktype)
@@ -533,12 +620,16 @@ class Recipe:
             Recipe.used(...)            # basenames used by the currently selected Recipe
             Recipe.used(None, ...)      # same as above
 
-        Input:
-            tmin        lower time limit in seconds TDB; None for all times.
-            tmax        upper time limit in seconds TDB; None for all times.
-            time        alternative time input as a tuple (tmin,tmax).
-            ids         NAIF ID or set of NAIF IDs.
+        Args:
+            tmin (xxx, optional): Lower time limit in seconds TDB; None for all times.
+            tmax (xxx, optional): Upper time limit in seconds TDB; None for all times.
+            time (xxx): Alternative time input as a tuple (tmin,tmax).
+            ids (xxx, optional): NAIF ID or set of NAIF IDs.
+
+        Returns:
+            xxx: xxx
         """
+#xxx Unknown arg name: time
 
         basenames = []
         for ktype in _KTYPES:

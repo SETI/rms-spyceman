@@ -49,7 +49,15 @@ def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versio
     # Internal functions...
 
     def property_keys(keynames, defaults):
-        """The set of dictionary keys compatible with user inputs."""
+        """The set of dictionary keys compatible with user inputs.
+
+        Args:
+            keynames (xxx): Xxx
+            defaults (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         keys = set(defaults.keys())
         for i, name in enumerate(keynames):
@@ -65,7 +73,15 @@ def func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versio
         return keys
 
     def exclusion_keys(property_values, kfile):
-        """The set of exclusion keys to which the given KernelFile applies."""
+        """The set of exclusion keys to which the given KernelFile applies.
+
+        Args:
+            property_values (xxx): Xxx
+            kfile (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         keylist = [[]]
         for name in func.EXCLUDE:
@@ -212,7 +228,7 @@ def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alp
               default_properties={},
               notes='', docstrings={}, propnames=[]):
     """Function returning a function that returns Kernel objects based on a set of
-    standardized inputs plus option case-specific properties.
+    standardized inputs plus optional case-specific properties.
 
     Inputs:
         funcname    name of the function, e.g., "spk". Appears in the help message.
@@ -242,12 +258,12 @@ def spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='alp
                     function.
         default_times       a two-element tuple of default values for (tmin, tmax).
                             Alternatively, a dictionary of tuples keyed by the
-                            default_time_key.
-        default_times_key   list of property names used as indices into the default_times
-                            dictionary key.
+                            `default_times_key`.
+        default_times_key   list of property names used as indices into the
+                            `default_times` dictionary key.
         default_ids         the set of NAIF IDs to use by default. Alternatively, a
-                            dictionary of sets using the default_id_key.
-        default_ids_key     list of property names used as indices into the default_ids
+                            dictionary of sets using the `default_ids_key`.
+        default_ids_key     list of property names used as indices into the `default_ids`
                             dictionary key.
         default_properties  a dictionary of the default value for each property; property
                             names not included have a default value of None.

@@ -15,7 +15,12 @@ class Metakernel(Kernel):
     _ktype = 'META'                 # fixed value for every instance of this subclass
 
     def __init__(self, *kernels, name=''):
-        """Construct a Metakernel object for one or more Kernel objects or basenames."""
+        """Construct a Metakernel object for one or more Kernel objects or basenames.
+
+        Args:
+            *kernels (xxx): Xxx
+            name (str, optional): Xxx
+        """
 
         if not kernels:             # pragma: no branch
             raise ValueError('at least one kernel must be specified')
@@ -54,13 +59,19 @@ class Metakernel(Kernel):
 
         This overrides the default method to prevent a metakernel from having exclusions
         or reqirements.
+
+        Args:
+            same_ktype_set (xxx): Xxx
+            diff_ktype_set (xxx): Xxx
+            kernels (xxx): Xxx
         """
 
         raise ValueError('a metakernel cannot have exclusions or requirements')
 
     @property
     def basenames(self):
-        """The ordered list of basenames associated with this Kernel object."""
+        """The ordered list of basenames associated with this Kernel object.
+        """
 
         basenames = []
         for ktype in _KTYPES:
@@ -68,7 +79,11 @@ class Metakernel(Kernel):
 
     @property
     def subkernels(self):
-        """A list of the included kernel objects."""
+        """A list of the included kernel objects.
+
+        Returns:
+            xxx: xxx
+        """
         return list(self._kdict.values())
 
 ############################################################

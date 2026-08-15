@@ -18,13 +18,27 @@ _EXT_REGEX = '(' + '|'.join(ext[1:] for ext in _EXTENSIONS) + ')'
 _BASENAME_REGEX = re.compile(r'[\w.-]+\.' + _EXT_REGEX + '$', re.I)
 
 def is_basename(basename):
-    """True if this string appears to be a valid kernel file basename."""
+    """True if this string appears to be a valid kernel file basename.
+
+    Args:
+        basename (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     return (isinstance(basename, str)
             and bool(_BASENAME_REGEX.match(basename)))
 
 def basename_ext(basename):
-    """The extension of this basename or regular expression."""
+    """The extension of this basename or regular expression.
+
+    Args:
+        basename (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if isinstance(basename, re.Pattern):
         basename = basename.pattern
@@ -33,7 +47,14 @@ def basename_ext(basename):
     return '.' + ext
 
 def basename_ktype(basename):
-    """The ktype of this basename or regular expression; an empty string if unknown."""
+    """The ktype of this basename or regular expression; an empty string if unknown.
+
+    Args:
+        basename (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     ext = basename_ext(basename).lower()
     return _EXTENSIONS.get(ext, '')
@@ -43,7 +64,14 @@ def basename_ktype(basename):
 ##########################################################################################
 
 def validate_release_date(date):
-    """Format a given release date as "YYYY-MM-DD". None returns ""."""
+    """Format a given release date as "YYYY-MM-DD". None returns "".
+
+    Args:
+        date (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if date:
         (day, _) = julian.day_sec_from_string(date)
@@ -58,6 +86,13 @@ def validate_version(version, sets_ok=True):
     A valid version must be a string, int, or tuple of ints. Multiple versions can be
     included in a set. None returns "". A string containing integers separated by periods
     is converted to a tuple of ints.
+
+    Args:
+        version (xxx): Xxx
+        sets_ok (bool, optional): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # An isolated None becomes "" because a version cannot be None
@@ -114,7 +149,14 @@ def validate_version(version, sets_ok=True):
 
 
 def _naif_id(naif_id):
-    """Convert name to int if it is a body name or frame name."""
+    """Convert name to int if it is a body name or frame name.
+
+    Args:
+        naif_id (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if isinstance(naif_id, numbers.Integral):
         return int(naif_id)
@@ -142,6 +184,12 @@ def validate_naif_ids(ids):
 
     The validated values are returned as a set of ints. An input of None returns an empty
     set.
+
+    Args:
+        ids (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     if ids is None:
@@ -154,7 +202,14 @@ def validate_naif_ids(ids):
 
 
 def naif_ids_with_aliases(ids):
-    """Expand a set of NAIF IDs to include all aliases."""
+    """Expand a set of NAIF IDs to include all aliases.
+
+    Args:
+        ids (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if ids is None:
         return set()
@@ -175,7 +230,14 @@ def naif_ids_with_aliases(ids):
 
 
 def naif_ids_wo_aliases(ids):
-    """The given NAIF ID or set of IDs, with any aliases replaced by their primary ID."""
+    """The given NAIF ID or set of IDs, with any aliases replaced by their primary ID.
+
+    Args:
+        ids (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if ids is None:
         return set()
@@ -197,7 +259,14 @@ def naif_ids_wo_aliases(ids):
 
 
 def validate_time(time):
-    """The time converted to a number of seconds TDB."""
+    """The time converted to a number of seconds TDB.
+
+    Args:
+        time (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if isinstance(time, str):
         day, sec = julian.day_sec_from_string(time)
@@ -228,7 +297,14 @@ def _input_set(value, default=set()):
 
 
 def _input_list(value):
-    """Convert an input value to a list of values if it is not currently a list."""
+    """Convert an input value to a list of values if it is not currently a list.
+
+    Args:
+        value (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if not value and value != 0:    # None, empty set, list or tuple, but not zero
         return []
@@ -242,6 +318,13 @@ def _input_list(value):
 def _test_version(input_version, kfile):
     """Compare an input version or a set or range of versions to a KernelFile's
     version(s).
+
+    Args:
+        input_version (xxx): Xxx
+        kfile (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # Check a list, which indicates an input range
@@ -302,6 +385,14 @@ _BASENAME_PATTERN = re.compile(r'[\w.-]+$')
 def _intersect_basenames(basenames, choices, flags=re.I):
     """The intersection of two sets of basenames. Either set can contain one or more
     regular expressions.
+
+    Args:
+        basenames (xxx): Xxx
+        choices (xxx): Xxx
+        flags (RegexFlag, optional): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # Check for empty input

@@ -21,44 +21,58 @@ class Kernel(object):
     """Kernel is an abstract class that defines one or more SPICE kernel files and the
     rules for how to to furnish them.
 
-    Every kernel instance has these properties:
-        name            A name string for this kernel.
-        ktype           The type of this kernel: "CK", "SPK", "LSK", etc.
-        naif_ids        The set of NAIF IDs covered by this kernel, including aliases;
-                        {} if the kernel applies to all NAIF IDs.
-        naif_ids_wo_aliases
-                        The set of NAIF IDs covered by this kernel, excluding aliases;
-                        {} if the kernel applies to all NAIF IDs.
-        time            Time limits as a tuple of two times in seconds TDB, or (None,
-                        None) if this kernel applies to all times.
-        release_date    Release date as an ISO date string "yyyy-mm-dd", or an empty
-                        string if no release date is known.
-        version         Version of this kernel file as a string, integer, or tuple of
-                        integers; an empty string if the version is undefined.
-        family          The family name for this kernel; in general, version IDs refer to
-                        different kernels within the same family.
-        properties      A dictionary of additional name/value pairs that are relevant to
-                        this Kernel. For example, perhaps properties['mission']='Cassini'.
+    Attributes:
+        name (str):
+            A name string for this kernel.
+        ktype (str):
+            The type of this kernel: "CK", "SPK", "LSK", etc.
+        naif_ids (set[int]):
+            The NAIF IDs covered by this kernel, including aliases; an empty set if the
+            kernel applies to all NAIF IDs.
+        naif_ids_wo_aliases (set[int]):
+            The NAIF IDs covered by this kernel, excluding aliases; an empty set if the
+            kernel applies to all NAIF IDs.
+        time ((float, float) or (None, None)):
+            Time limits as a tuple of two times in seconds TDB; (None, None) if this
+            kernel applies to all times.
+        release_date (str):
+            Release date as an ISO date string "yyyy-mm-dd"; an empty string if no release
+            date is known.
+        version (int, str, or tuple[int, ...]):
+            Version of this kernel file; an empty string if the version is undefined. A
+            version using decimal points (e.g., 1.2.3) is represented by a tuple of ints.
+        family (str):
+            The family name for this kernel; in general, version IDs refer to different
+            kernels within the same family.
+        properties (dict):
+            Additional name/value pairs that are relevant to this Kernel. For example,
+            properties['mission'] = 'Cassini'.
+        basenames (list[str]):
+            All the kernel file basenames managed by this Kernel.
+        is_ordered (bool):
+            True if this uses an ordered list of kernel files, meaning that later kernels
+            take precedence over earlier ones.
+        exclusions (set[str or Kernel]):
+            Excluded Kernel objects or basenames. When this kernel is furnished, it is
+            guaranteed that any exclusions will be unloaded.
+        prerequisites (set[str or Kernel]):
+            Kernel objects or basenames that will always be furnished at a lower
+            precedence when this kernel is furnished.
+        postrequisites (set[str or Kernel]):
+            Kernel objects or basenames that will always be furnished at a higher
+            precedence when this kernel is furnished.
+        corequisites  (set[str or Kernel]):
+            Kernel objects of a different ktype that will always be furnished when this
+            kernel is furnished. Because their ktype differs from that of this ktype,
+            their precedence level does not matter.
 
-        basenames       The list of kernel basenames managed by this kernel.
-        is_ordered      True if this is an ordered list, meaning that later kernels take
-                        precedence over earlier ones.
-        exclusions      The set of excluded Kernel objects or basenames. When this kernel
-                        is furnished, it is guaranteed that any exclusions will be
-                        unloaded.
-        prerequisites   A set of Kernel objects or basenames that will always be furnished
-                        at a lower precedence when this kernel is furnished.
-        postrequisites  A set of Kernel objects or basenames that will always be furnished
-                        at a higher precedence when this kernel is furnished.
-        corequisites    A set of Kernel objects of a different ktype that will always be
-                        furnished when this kernel is furnished. Because their ktype
-                        differs from that of this ktype, their precedence level does not
-                        matter.
-
-    Every kernel instance supports these methods:
-        exclude()       Add these kernels to the set of exclusions.
-        require()       Add these kernels to the set of pre-, post-, or co-requisites.
-        furnish()       Furnish this kernel within a specified range of times and/or for a
+    Methods:
+        exclude():
+            Add one or more kernels to the set of exclusions.
+        require():
+            Add one or more kernels to the set of pre-, post-, or co-requisites.
+        furnish():
+            Furnish this kernel within a specified range of times and/or for a
                         specified set of NAIF IDs.
         unload()        Unload this kernel within a specified range of times and/or for a
                         specified set of NAIF IDs.
@@ -98,6 +112,12 @@ class Kernel(object):
     def as_kernel(kernel):
         """Return this input as a subclass of Kernel. Strings are interpreted as basenames
         and returned as KernelFiles.
+
+        Args:
+            kernel (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if isinstance(kernel, Kernel):
@@ -117,7 +137,14 @@ class Kernel(object):
 
     @staticmethod
     def download(status=None):
-        """Set and/or return the download status."""
+        """Set and/or return the download status.
+
+        Args:
+            status (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         if status is None:
             status = Kernel._DOWNLOADS
@@ -128,7 +155,14 @@ class Kernel(object):
 
     @staticmethod
     def debug(status=None):
-        """Set and/or return the debug status."""
+        """Set and/or return the debug status.
+
+        Args:
+            status (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         if status is None:
             status = Kernel._DEBUG
@@ -139,7 +173,14 @@ class Kernel(object):
 
     @staticmethod
     def verbose(status=None):
-        """Set and/or return the verbose status."""
+        """Set and/or return the verbose status.
+
+        Args:
+            status (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         if status is None:
             status = Kernel._VERBOSE
@@ -157,17 +198,28 @@ class Kernel(object):
         """The ordered list of basenames associated with this Kernel object.
 
         The list excudes pre-, post-, and co-requisites.
+
+        Returns:
+            xxx: xxx
         """
         return self._basenames
 
     @property
     def is_ordered(self):
-        """True if this Kernel's basename list is ordered by precedence."""
+        """True if this Kernel's basename list is ordered by precedence.
+
+        Returns:
+            xxx: xxx
+        """
         return self._is_ordered
 
     @property
     def name(self):
-        """The name for this kernel."""
+        """The name for this kernel.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_name') or not self._name:
             kernels = [Kernel.KernelFile(b) for b in self._basenames]
@@ -182,7 +234,11 @@ class Kernel(object):
 
     @property
     def ktype(self):
-        """Kernel type of this file: "SPK", "CK", "LSK", etc."""
+        """Kernel type of this file: "SPK", "CK", "LSK", etc.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_ktype') or self._ktype is None:
             self._ktype = Kernel.as_kernel(self.basenames[0]).ktype
@@ -193,6 +249,9 @@ class Kernel(object):
     def naif_ids(self):
         """The set of NAIF IDs covered by this file, including aliases; an empty set if
         the kernel applies to all NAIF IDs.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_naif_ids') or self._naif_ids is None:
@@ -205,6 +264,9 @@ class Kernel(object):
     def naif_ids_wo_aliases(self):
         """The set of NAIF IDs covered by this file, without aliases; an empty set if the
         kernel applies to all NAIF IDs.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_naif_ids_wo_aliases') or self._naif_ids_wo_aliases is None:
@@ -215,7 +277,11 @@ class Kernel(object):
 
     @property
     def time(self):
-        """Time limits as a tuple of two times in seconds TDB."""
+        """Time limits as a tuple of two times in seconds TDB.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_time') or self._time is None:
             self._time = Kernel._time_for_kernels(self.basenames)
@@ -226,6 +292,9 @@ class Kernel(object):
     def release_date(self):
         """Release date as an ISO date string "yyyy-mm-dd", or "" if no release date is
         known.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_release_date') or self._release_date is None:
@@ -235,7 +304,11 @@ class Kernel(object):
 
     @property
     def version(self):
-        """Version of this kernel file as a string, integer, or tuple of integers."""
+        """Version of this kernel file as a string, integer, or tuple of integers.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_version') or self._version is None:
             self._version = Kernel._version_for_kernels(self.basenames)
@@ -250,6 +323,9 @@ class Kernel(object):
     def family(self):
         """The family name of this kernel object. Typically, kernels with a different
         version or time range often are members of the same family.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_family') or self._family is None:
@@ -263,7 +339,11 @@ class Kernel(object):
 
     @property
     def properties(self):
-        """The dictionary of special properties for this Kernel."""
+        """The dictionary of special properties for this Kernel.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_properties') or self._properties is None:
             self._properties = Kernel._properties_for_kernels(self.basenames)
@@ -276,7 +356,11 @@ class Kernel(object):
 
     @property
     def exclusions(self):
-        """The set of excluded kernel file basenames for this kernel."""
+        """The set of excluded kernel file basenames for this kernel.
+
+        Returns:
+            xxx: xxx
+        """
 
         if not hasattr(self, '_exclusions'):
             self._exclusions = set()
@@ -289,6 +373,9 @@ class Kernel(object):
 
         Each input value can be a Kernel object, a kernel file basename, or a regular
         expression that matches kernel file basenames.
+
+        Args:
+            *kernels (xxx): Xxx
         """
 
         self._add_to_set(self.exclusions, self.exclusions, kernels)
@@ -300,6 +387,9 @@ class Kernel(object):
         A prerequisite kernels will always be furnished, but at lower precedence, when
         this kernel is furnished. Prerequisites are always of the same ktype as the given
         kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_prerequisites'):
@@ -314,6 +404,9 @@ class Kernel(object):
         A post-requisite kernels will always be furnished, and at higher precedence, when
         this kernel is furnished. Post-requisites are always of the same ktype as the
         given kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_postrequisites'):
@@ -327,6 +420,9 @@ class Kernel(object):
 
         A co-requisite kernels will always be furnished when this kernel is furnished.
         Co-requisites are always of a different ktype than the given kernel.
+
+        Returns:
+            xxx: xxx
         """
 
         if not hasattr(self, '_corequisites'):
@@ -343,6 +439,10 @@ class Kernel(object):
         Kernels of a different ktype from this kernel are defined as co-requisites. Those
         of the same ktype are pre-requisites if above is False, post-requisites if above
         is True.
+
+        Args:
+            *kernels (xxx): Xxx
+            above (bool, optional): Xxx
         """
 
         if above:
@@ -358,6 +458,11 @@ class Kernel(object):
 
         exclusions is True if we are adding to this Kernel's exclusion set; otherwise,
         we are adding to one or more of its requisite sets.
+
+        Args:
+            same_ktype_set (xxx): Xxx
+            diff_ktype_set (xxx): Xxx
+            kernels (xxx): Xxx
         """
 
         meta_msg = 'a metakernel cannot be part of an exclusion set or requirement set'
@@ -416,6 +521,11 @@ class Kernel(object):
         Multiple "front" patterns can be specified inside a tuple, list, or set. If this
         input contains capturing sequences, these can be referenced in the "below"
         patterns.
+
+        Args:
+            front (xxx): Xxx
+            *behind (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
         """
 
         if not hasattr(self, '_shadows'):
@@ -430,13 +540,25 @@ class Kernel(object):
 
     def add_shadows(self, tuples, flags=re.IGNORECASE):
         """Add a list of shadow tuples/lists to this kernel. Each tuple contains a "front"
-        pattern followed by one or "behind" patterns.""""
+        pattern followed by one or "behind" patterns."
+
+        Args:
+            tuples (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
+        """
 
         for front_behind in tuples:
             self.add_shadow(*front_behind, flags=flags)
 
     def get_shadows(self, basename):
-        """The list of compiled regular expressions that this basename shadows."""
+        """The list of compiled regular expressions that this basename shadows.
+
+        Args:
+            basename (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         if hasattr(self, '_shadows'):
             sources = self._shadows + Kernel.KernelFile._SHADOWS
@@ -479,6 +601,7 @@ class Kernel(object):
             refloc      the new index of the given refloc in the list of furnished
                         basenames.
         """
+#xxx Unknown docstring format
 
         # Unload any excluded kernels; track minloc
         for kernel in self.exclusions:
@@ -516,7 +639,19 @@ class Kernel(object):
                      reason=''):
         """Internal method to furnish this kernel, ensuring that every furnished basename
         is at or above a specified location in the list.
+
+        Args:
+            tmin (xxx, optional): Xxx
+            tmax (xxx, optional): Xxx
+            ids (xxx, optional): Xxx
+            minloc (int, optional): Xxx
+            refloc (xxx, optional): Xxx
+            reason (str, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
+#xxx Insert "*"?
 
         furnished = _FURNISHED_BASENAMES[self.ktype]
 
@@ -621,6 +756,8 @@ class Kernel(object):
         Return          new location of the given refloc value. The value will change for
                         each basename below this location that is unloaded.
         """
+#xxx Insert "*"?
+#xxx Unknown docstring format
 
         furnished = _FURNISHED_BASENAMES[self.ktype]
 
@@ -651,10 +788,13 @@ class Kernel(object):
         """The ordered list of kernel basenames that are or would be used for a given
         range of times and/or a set of NAIF IDs, including pre-, post-, and co-requisites.
 
-        Inputs:
-            tmin        earliest time in TDB seconds. Default is to ignore time.
-            tmax        latest time in TDB seconds. Default is to use the value of tmin.
-            ids         set of NAIF IDs that are required. Default is to ignore NAIF IDs.
+        Args:
+            tmin (xxx, optional): Earliest time in TDB seconds. Default is to ignore time.
+            tmax (xxx, optional): Latest time in TDB seconds. Default is to use the value of tmin.
+            ids (xxx, optional): Set of NAIF IDs that are required. Default is to ignore NAIF IDs.
+
+        Returns:
+            xxx: xxx
         """
 
         basenames = []
@@ -677,6 +817,14 @@ class Kernel(object):
     def _used_for(self, tmin=None, tmax=None, ids=None):
         """Internal method to return the list of basenames to be used in this range of
         times and/or this set of NAIF IDs.
+
+        Args:
+            tmin (xxx, optional): Xxx
+            tmax (xxx, optional): Xxx
+            ids (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         return [b for b in self.basenames
@@ -690,18 +838,23 @@ class Kernel(object):
         """True if this kernel has content that overlaps a kernel or a specified time
         range and/or set of NAIF IDs.
 
-        Inputs:
-            tmin        earliest time in TDB seconds. Default is to ignore time. As an
-                        alternative, the first input can be a Kernel object, in which case
-                        tmin, tmax, and ids are inferred from it. This option makes it
-                        possible to compare kernels via "kernel1.has_overlap(kernel2)".
-            tmax        latest time in TDB seconds. Default is to use the value of tmin.
-            ids         one or more NAIF IDs. Default is to ignore NAIF IDs.
-            dt          number of seconds that two time intervals can be separated by for
-                        them to be regarded as non-overlapping. This allows time ranges
-                        that are "close" to be treated as overlapping even if the limits
-                        do not quite intersect. Default is to use the defined value of
-                        Kernel.DT.
+        Args:
+            tmin (xxx, optional):
+                Earliest time in TDB seconds. Default is to ignore time. As an
+                alternative, the first input can be a Kernel object, in which case
+                tmin, tmax, and ids are inferred from it. This option makes it
+                possible to compare kernels via "kernel1.has_overlap(kernel2)".
+            tmax (xxx, optional): Latest time in TDB seconds. Default is to use the value of tmin.
+            ids (xxx, optional): One or more NAIF IDs. Default is to ignore NAIF IDs.
+            dt (xxx, optional):
+                Number of seconds that two time intervals can be separated by for
+                them to be regarded as non-overlapping. This allows time ranges
+                that are "close" to be treated as overlapping even if the limits
+                do not quite intersect. Default is to use the defined value of
+                Kernel.DT.
+
+        Returns:
+            xxx: xxx
         """
 
         if is_basename(tmin):
@@ -724,16 +877,21 @@ class Kernel(object):
 
         If tmin is None or tmax is None, that time limit is unconstrained.
 
-        Inputs:
-            tmin        optional earliest time in TDB seconds, or None for all times. As
-                        an alternative, the input can be a Kernel object, in which case
-                        tmin and tmax are inferred from it. This option makes it possible
-                        to compare kernels via "kernel1.time_overlap(kernel2)".
-            tmax        latest time in TDB seconds, or None to use tmin.
-            dt          number of seconds that two time intervals must be separated by for
-                        them to be regarded as non-overlapping. This allows time ranges
-                        that are "close" to be treated as overlapping even if the limits
-                        do not quite intersect. Use True to set dt to Kernel.DT.
+        Args:
+            tmin (xxx, optional):
+                Optional earliest time in TDB seconds, or None for all times. As
+                an alternative, the input can be a Kernel object, in which case
+                tmin and tmax are inferred from it. This option makes it possible
+                to compare kernels via "kernel1.time_overlap(kernel2)".
+            tmax (xxx, optional): Latest time in TDB seconds, or None to use tmin.
+            dt (bool, optional):
+                Number of seconds that two time intervals must be separated by for
+                them to be regarded as non-overlapping. This allows time ranges
+                that are "close" to be treated as overlapping even if the limits
+                do not quite intersect. Use True to set dt to Kernel.DT.
+
+        Returns:
+            xxx: xxx
         """
 
         # Interpret the inputs
@@ -775,12 +933,16 @@ class Kernel(object):
         overlap of {} and a {399} is {399}. However, if both sets are non-empty, this
         returns the intersection of the two sets.
 
-        Inputs:
-            ids         NAIF ID or set of NAIF IDs to check against this kernel; if None,
-                        the set of IDs of the kernel is returned. As an alternative, the
-                        input can be a Kernel object, in which case the set of IDs is
-                        inferred from it. This option makes it possible to compare kernels
-                        via "kernel1.id_overlap(kernel2)".
+        Args:
+            ids (xxx, optional):
+                NAIF ID or set of NAIF IDs to check against this kernel; if None,
+                the set of IDs of the kernel is returned. As an alternative, the
+                input can be a Kernel object, in which case the set of IDs is
+                inferred from it. This option makes it possible to compare kernels
+                via "kernel1.id_overlap(kernel2)".
+
+        Returns:
+            xxx: xxx
         """
 
         if isinstance(ids, Kernel):
@@ -803,7 +965,15 @@ class Kernel(object):
 
     @staticmethod
     def _naif_ids_for_kernels(kernels, wo_aliases=False):
-        """The union of all NAIF IDs covered by these kernels."""
+        """The union of all NAIF IDs covered by these kernels.
+
+        Args:
+            kernels (xxx): Xxx
+            wo_aliases (bool, optional): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         naif_ids = set()
         for kernel in kernels:
@@ -826,6 +996,13 @@ class Kernel(object):
 
         If the kernel list is empty or there are no kernels covering the given NAIF IDs,
         None is returned.
+
+        Args:
+            kernels (xxx): Xxx
+            ids (xxx, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if not kernels:
@@ -858,20 +1035,41 @@ class Kernel(object):
 
     @staticmethod
     def _release_date_for_kernels(kernels):
-        """The lastest release date among these kernels."""
+        """The lastest release date among these kernels.
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         return max(Kernel.as_kernel(k).release_date for k in kernels)
 
     @staticmethod
     def _family_for_kernels(kernels):
-        """A reasonable family name for a set of kernels."""
+        """A reasonable family name for a set of kernels.
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         families = {Kernel.as_kernel(k).family for k in kernels}
         return Kernel._common_name(families)
 
     @staticmethod
     def _name_for_kernels(kernels):
-        """A reasonable name for a set of kernels."""
+        """A reasonable name for a set of kernels.
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         names = {Kernel.as_kernel(k).name for k in kernels}
         return Kernel._common_name(names)
@@ -882,6 +1080,12 @@ class Kernel(object):
 
         This is the maximum among the versions of the kernels provided. If the versions
         are a mixture of strings and integers/tuples, the set of both maxima is returned.
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         versions = set()
@@ -912,7 +1116,14 @@ class Kernel(object):
 
     @staticmethod
     def _properties_for_kernels(kernels):
-        """Merged properties among these kernels."""
+        """Merged properties among these kernels.
+
+        Args:
+            kernels (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         merged = {}
         for kernel in kernels:
@@ -940,6 +1151,13 @@ class Kernel(object):
         """A reasonable summary name for a list of names.
 
         If maxlen is nonzero, it is the approximate maximum length of the name returned.
+
+        Args:
+            names (xxx): Xxx
+            maxlen (int, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         names = set(names)

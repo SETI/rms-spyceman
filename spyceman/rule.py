@@ -66,6 +66,12 @@ def _date_regex(tag):
     """The regular expression associated with this date tag.
 
     If it is not a recognized date tag, return an empty string.
+
+    Args:
+        tag (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # If this is not a valid date tag, return ""
@@ -97,6 +103,12 @@ def _number_regex(tag):
     """The regular expression associated with this version number tag.
 
     If it is not a recognized version tag, return an empty string.
+
+    Args:
+        tag (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     if tag == 'N+':
@@ -109,7 +121,14 @@ def _number_regex(tag):
 
 
 def _name_regex(tag):
-    """The regular expression associated with this version name tag."""
+    """The regular expression associated with this version name tag.
+
+    Args:
+        tag (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if tag == 'X+':
         return r'[a-zA-Z0-9](?:|[\w-]*[a-zA-Z0-9])'
@@ -130,6 +149,12 @@ def _interpret_tags(string):
     """Replace any rule tags ("YYDOY", "NNN", etc.) with their regular expressions.
 
     Return the revised regular expression followed by a list of tuples (group index, tag).
+
+    Args:
+        string (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # Update the pattern, replacing tags with their regular expressions
@@ -174,7 +199,14 @@ def _interpret_tags(string):
 
 
 def remove_tags(string):
-    """Replace any rule tags ("YYDOY", "NNN", etc.) with their regular expressions."""
+    """Replace any rule tags ("YYDOY", "NNN", etc.) with their regular expressions.
+
+    Args:
+        string (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     return _interpret_tags(string)[0]
 
@@ -223,120 +255,130 @@ class Rule:
                        version=None, naif_ids=None, source=None, dest=None, **properties):
         """Constructor for a Rule.
 
-        Input:
-            pattern     a regular expression string that might match a file basename.
-
-                        However, components of this expression that indicate a release
-                        date or time limit must be replaced by one of these special tags:
-                            "(YYYYMONDD)"       e.g., "2022Dec01"
-                            "(YYYY_MON_DD)"     e.g., "2022_Dec_01"
-                            "(YYYY-MON-DD)"     e.g., "2022-Dec-01"
-                            "(YYYYMMDD)"        e.g., "20221201"
-                            "(YYYY_MM_DD)"      e.g., "2022_12_01"
-                            "(YYYY-MM-DD)"      e.g., "2022-12-01"
-                            "(YYMONDD)"         e.g., "22Dec01"
-                            "(YY_MON_DD)"       e.g., "22_Dec_01"
-                            "(YY-MON-DD)"       e.g., "22-Dec-01"
-                            "(YYMMDD)"          e.g., "221201"
-                            "(YY_MM_DD)"        e.g., "22_12_01"
-                            "(YY-MM-DD)"        e.g., "22-12-01"
-                            "(YYYYDOY)"         e.g., "2022305"
-                            "(YYYY_DOY)"        e.g., "2022_305"
-                            "(YYYY-DOY)"        e.g., "2022-305"
-                            "(YYDOY)"           e.g., "22305"
-                            "(YY_DOY)"          e.g., "22_305"
-                            "(YY-DOY)"          e.g., "22-305"
-                            "(DDMONYYYY)"       e.g., "01Dec2022"
-                            "(DD_MON_YYYY)"     e.g., "01_Dec_2022"
-                            "(DD-MON-YYYY)"     e.g., "01-Dec-2022"
-                            "(DDMMYYYY)"        e.g., "01122022"
-                            "(DD_MM_YYYY)"      e.g., "01_12_2022"
-                            "(DD-MM-YYYY)"      e.g., "01-12-2022"
-                            "(DDMONYY)"         e.g., "01Dec22"
-                            "(DD_MON_YY)"       e.g., "01_Dec_22"
-                            "(DD-MON-YY)"       e.g., "01-Dec-22"
-                            "(DDMMYYYY)"        e.g., "011222"
-                            "(DD_MM_YY)"        e.g., "01_12_22"
-                            "(DD-MM-YY)"        e.g., "01-12-22"
-
-                        In addition, you can indicate an embedded version by one of
-                        several tags:
-                            "(NN)"      an integer version defined by two digits;
-                            "(NNN)"     an integer version defined by three digits, and so
-                                        on for any fixed number of digits;
-                            "(N+)"      an integer version defined by a variable number of
-                                        digits;
-                            "(XX)"      a version name defined by two characters;
-                            "(XXX)"     a version name defined by three characters, and so
-                                        on for any fixed number of characters;
-                            "(X+)"      a version name defined by a variable number of
-                                        characters;
-                        Hierarchical version numbers can be is indicated by multiple
-                        tags using "N". For example, a file basename "kernel_v10.2.3.ck"
-                        would be matched by "kernel_v(N+).(N).(N).ck", returning the
-                        version as a tuple (10,2,3).
-
-                        It is also possible to explicitly identify the location of an
-                        embedded version, NAIF ID, or named property using a capture
-                        pattern "(?P<name>...)", where "name" is replaced by the attribute
-                        or property name and the ellipsis is replaced by a standard
-                        regular expression.
-
-            family      an optional string or replacement pattern defining the family
-                        name. By default, a family name is created by using the given
-                        basename and replacing each embedded field with its tag. You can
-                        override this behavior by providing a string containing
-                        replacement patterns "\\1", "\\2", etc.
-
-            flags       the flags to use when compiling the pattern; default is
-                        re.IGNORECASE.
-
-            datefirst   if a pattern contains three dates, use True to indicate that the
-                        release date appears before the start/stop times; False if
-                        the release date appear after them.
-
-            inclusive   True if the stop time includes the entire 24 hours of the second
-                        embedded date; False if it is excluded.
-
-            version     if provided, this value will be used to assign or modify the
-                        version of any file matching the given pattern. If it is an
-                        explicit string, integer, or tuple, all files matching the pattern
-                        will all be assigned this value. This can be useful if file names
-                        are inconsistent, such that different versions match different
-                        patterns. Alternatively, you can provide a function or dictionary
-                        to modify the value captured implicitly (using "N" or "X" tags),
-                        or, explicitly using "(P?<version>...)"; see details below.
-
-            naif_ids    if provided, the set of NAIF IDs associated with a matching
-                        kernel. Alternatively, if "(P?<naif_ids>...)" appears in the
-                        pattern, then the set of NAIF IDs will be derived from the file
-                        name, where this input value can be a function or dictionary, as
-                        discussed below.
-
-            source      an optional URL or list of URLs pointing to online directories
-                        that might contain a file that matches this pattern.
-
-            dest        an optional local directory where this file should be stored if it
-                        is downloaded.
-
-            name=value  one or more name/value pairs that will be used to define
-                        additional attributes or properties. If the value is a function or
-                        dictionary, it will be used to modify the value captured via
-                        "(?P<name>...)".
-
-            When the input value of version, naif_ids, or any named property is a
-            function, the value used will be that returned by applying the function to
-            the captured substring within the given file's basename. Note that these
-            choices might be useful:
+        Args:
+            pattern (xxx):
+                A regular expression string that might match a file basename.
+                However, components of this expression that indicate a release
+                date or time limit must be replaced by one of these special tags:
+                "(YYYYMONDD)"       e.g., "2022Dec01"
+                "(YYYY_MON_DD)"     e.g., "2022_Dec_01"
+                "(YYYY-MON-DD)"     e.g., "2022-Dec-01"
+                "(YYYYMMDD)"        e.g., "20221201"
+                "(YYYY_MM_DD)"      e.g., "2022_12_01"
+                "(YYYY-MM-DD)"      e.g., "2022-12-01"
+                "(YYMONDD)"         e.g., "22Dec01"
+                "(YY_MON_DD)"       e.g., "22_Dec_01"
+                "(YY-MON-DD)"       e.g., "22-Dec-01"
+                "(YYMMDD)"          e.g., "221201"
+                "(YY_MM_DD)"        e.g., "22_12_01"
+                "(YY-MM-DD)"        e.g., "22-12-01"
+                "(YYYYDOY)"         e.g., "2022305"
+                "(YYYY_DOY)"        e.g., "2022_305"
+                "(YYYY-DOY)"        e.g., "2022-305"
+                "(YYDOY)"           e.g., "22305"
+                "(YY_DOY)"          e.g., "22_305"
+                "(YY-DOY)"          e.g., "22-305"
+                "(DDMONYYYY)"       e.g., "01Dec2022"
+                "(DD_MON_YYYY)"     e.g., "01_Dec_2022"
+                "(DD-MON-YYYY)"     e.g., "01-Dec-2022"
+                "(DDMMYYYY)"        e.g., "01122022"
+                "(DD_MM_YYYY)"      e.g., "01_12_2022"
+                "(DD-MM-YYYY)"      e.g., "01-12-2022"
+                "(DDMONYY)"         e.g., "01Dec22"
+                "(DD_MON_YY)"       e.g., "01_Dec_22"
+                "(DD-MON-YY)"       e.g., "01-Dec-22"
+                "(DDMMYYYY)"        e.g., "011222"
+                "(DD_MM_YY)"        e.g., "01_12_22"
+                "(DD-MM-YY)"        e.g., "01-12-22"
+                In addition, you can indicate an embedded version by one of
+                several tags:
+                "(NN)"      an integer version defined by two digits;
+                "(NNN)"     an integer version defined by three digits, and so
+                on for any fixed number of digits;
+                "(N+)"      an integer version defined by a variable number of
+                digits;
+                "(XX)"      a version name defined by two characters;
+                "(XXX)"     a version name defined by three characters, and so
+                on for any fixed number of characters;
+                "(X+)"      a version name defined by a variable number of
+                characters;
+                Hierarchical version numbers can be is indicated by multiple
+                tags using "N". For example, a file basename "kernel_v10.2.3.ck"
+                would be matched by "kernel_v(N+).(N).(N).ck", returning the
+                version as a tuple (10,2,3).
+                It is also possible to explicitly identify the location of an
+                embedded version, NAIF ID, or named property using a capture
+                pattern "(?P<name>...)", where "name" is replaced by the attribute
+                or property name and the ellipsis is replaced by a standard
+                regular expression.
+            family (str, optional):
+                An optional string or replacement pattern defining the family
+                name. By default, a family name is created by using the given
+                basename and replacing each embedded field with its tag. You can
+                override this behavior by providing a string containing
+                replacement patterns "\\1", "\\2", etc.
+            flags (RegexFlag, optional):
+                The flags to use when compiling the pattern; default is
+                re.IGNORECASE.
+            datefirst (bool, optional):
+                If a pattern contains three dates, use True to indicate that the
+                release date appears before the start/stop times; False if
+                the release date appear after them.
+            inclusive (bool, optional):
+                True if the stop time includes the entire 24 hours of the second
+                embedded date; False if it is excluded.
+            version (xxx, optional):
+                If provided, this value will be used to assign or modify the
+                version of any file matching the given pattern. If it is an
+                explicit string, integer, or tuple, all files matching the pattern
+                will all be assigned this value. This can be useful if file names
+                are inconsistent, such that different versions match different
+                patterns. Alternatively, you can provide a function or dictionary
+                to modify the value captured implicitly (using "N" or "X" tags),
+                or, explicitly using "(P?<version>...)"; see details below.
+            naif_ids (xxx, optional):
+                If provided, the set of NAIF IDs associated with a matching
+                kernel. Alternatively, if "(P?<naif_ids>...)" appears in the
+                pattern, then the set of NAIF IDs will be derived from the file
+                name, where this input value can be a function or dictionary, as
+                discussed below.
+            source (xxx, optional):
+                An optional URL or list of URLs pointing to online directories
+                that might contain a file that matches this pattern.
+            dest (xxx, optional):
+                An optional local directory where this file should be stored if it
+                is downloaded.
+            name=value (xxx):
+                One or more name/value pairs that will be used to define
+                additional attributes or properties. If the value is a function or
+                dictionary, it will be used to modify the value captured via
+                "(?P<name>...)".
+            When (xxx): The input value of version, naif_ids, or any named property is a
+            function, (xxx): The value used will be that returned by applying the function to
+            the (xxx): Captured substring within the given file's basename. Note that these
+            choices (xxx):
+                Might be useful:
                 name=int        convert the captured pattern to an integer;
                 name=str.upper  convert the captured pattern to upper case;
                 name=str.lower  convert the captured pattern to lower case.
+            When (xxx): The input value of version, naif_ids, or any named property is a
+            dictionary, (xxx): The captured substring will be converted to lower case and used as
+            the (xxx): Key to this dictionary. If the key is not found in the dictionary, the
+            associated (xxx): Attribute will not be defined.
+            **properties (xxx): Xxx
 
-            When the input value of version, naif_ids, or any named property is a
-            dictionary, the captured substring will be converted to lower case and used as
-            the key to this dictionary. If the key is not found in the dictionary, the
-            associated attribute will not be defined.
+        Raises:
+            ValueError: xxx
         """
+#xxx Unknown arg name: name=value
+#xxx Unknown arg name: When
+#xxx Unknown arg name: function,
+#xxx Unknown arg name: the
+#xxx Unknown arg name: choices
+#xxx Unknown arg name: When
+#xxx Unknown arg name: dictionary,
+#xxx Unknown arg name: the
+#xxx Unknown arg name: associated
 
         # Identify the file extension; use "" if it cannot be inferred
         ext = '.' + pattern.rpartition('.')[-1].lower()
@@ -434,6 +476,12 @@ class Rule:
         If the rule does not match, the returned dictionary is empty. Otherwise, the
         dictionary will be contain the name and value of each attribute or property
         identified.
+
+        Args:
+            basename (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         match = self.regex.fullmatch(basename)
@@ -531,6 +579,12 @@ class Rule:
     def apply_all(basename):
         """Extract the rule-based info from a SPICE kernel basename that matches any of
         the defined rules.
+
+        Args:
+            basename (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         ext = '.' + basename.rpartition('.')[-1].lower()
@@ -549,7 +603,15 @@ class Rule:
 
     @staticmethod
     def _date_iso(string, tag):
-        """The matched date string in "yyyy-mm-dd" format."""
+        """The matched date string in "yyyy-mm-dd" format.
+
+        Args:
+            string (xxx): Xxx
+            tag (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         if 'YYYY' in tag:
             i = tag.index('YYYY')
@@ -638,6 +700,12 @@ _YYDOY_MINIMUM  = '02001'
 def _default_dates_from_basename(basename):
     """Extract up to three plausible dates from a file basename and return (family, list
     of dates in "yyyy-mm-dd" format); return (basename, []) on failure.
+
+    Args:
+        basename (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     # Look for up to three embedded dates
@@ -721,6 +789,12 @@ def _default_version_from_basename(basename):
     by an integer.
 
     Return (family, version number) on success; (basename, None) on failure.
+
+    Args:
+        basename (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     for pattern in (_V_PATTERN, _VERSION_PATTERN):

@@ -5,6 +5,7 @@
 
 import os
 import pathlib
+import re
 import requests
 
 if 'SPICE-DOWNLOADS' in os.environ:
@@ -22,7 +23,14 @@ _FANCY_INDEX_DATES_CACHE = {}
 
 
 def get_fancy_index_table(url):
-    """The content of a fancy index page as a list of tuples (filename, date, size)."""
+    """The content of a fancy index page as a list of tuples (filename, date, size).
+
+    Args:
+        url (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if url in _FANCY_INDEX_CACHE:
         return _FANCY_INDEX_CACHE[url]
@@ -69,7 +77,14 @@ def get_fancy_index_table(url):
 
 
 def get_fancy_index_dates(url):
-    """A dictionary mapping file basenames to date strings from a fancy index page."""
+    """A dictionary mapping file basenames to date strings from a fancy index page.
+
+    Args:
+        url (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     if url in _FANCY_INDEX_DATES_CACHE:
         return _FANCY_INDEX_DATES_CACHE[url]
@@ -83,15 +98,21 @@ def get_fancy_index_dates(url):
 def retrieve_online_file(source, dest, basename, dates=None, label=True):
     """Save a specified file from an online directory. Return the path to the saved file.
 
-    Input:
-        source      the online URL source directory of the file.
-        dest        subdirectory of the SPICE downloads directory where the file is to be
-                    saved.
-        basename    the basename of the file.
-        dates       optional dictionary mapping basename to date for all the files in this
-                    source directory.
-        label       True to download any ".lbl" and ".cmt" files as well.
+    Args:
+        source (xxx): The online URL source directory of the file.
+        dest (xxx):
+            Subdirectory of the SPICE downloads directory where the file is to be
+            saved.
+        basename (xxx): The basename of the file.
+        dates (xxx, optional):
+            Optional dictionary mapping basename to date for all the files in this
+            source directory.
+        label (bool, optional): True to download any ".lbl" and ".cmt" files as well.
+
+    Returns:
+        xxx: xxx
     """
+#xxx Insert "*"?
 
     url = source.rstrip('/') + '/' + basename
     request = requests.get(url, allow_redirects=True)
@@ -129,10 +150,13 @@ def retrieve_online_file(source, dest, basename, dates=None, label=True):
 def search_fancy_index(pattern, url, flags=re.IGNORECASE):
     """The set of files matching a regular expression at a given URL.
 
-    Input:
-        pattern     regular expression.
-        url         the online URL of a fancy index.
-        flags       compile flags for a regular expression.
+    Args:
+        pattern (xxx): Regular expression.
+        url (xxx): The online URL of a fancy index.
+        flags (RegexFlag, optional): Compile flags for a regular expression.
+
+    Returns:
+        xxx: xxx
     """
 
     date_dict = get_fancy_index_dates(url)

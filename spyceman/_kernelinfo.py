@@ -36,6 +36,11 @@ class _KernelInfo(object):
     _USE_TIMESTAMP_DATES = True
 
     def __init__(self, basename):
+        """Constructor for a _KernelInfo object.
+
+        Args:
+            basename (str): The basename of a kernel file.
+        """
 
         if basename in _KernelInfo.KERNELINFO:
             raise ValueError('_KernelInfo already defined for ' + basename)
@@ -82,7 +87,16 @@ class _KernelInfo(object):
 
     @staticmethod
     def lookup(basename):
-        """A _KernelInfo object for this basename, constructed anew if necessary."""
+        """The unique _KernelInfo object for this basename.
+
+        Args:
+            basename (str): The basename of a kernel file.
+
+        Return:
+            _KernelInfo:
+                The unique _KernelInfo object associated with this basename, constructed
+                anew if it does not already exist.
+        """
 
         try:
             return _KernelInfo.KERNELINFO[basename]
@@ -97,7 +111,13 @@ class _KernelInfo(object):
 
     @property
     def _rule_values(self):
-        """Rule values as a dictionary."""
+        """The rule values for with this _KernelInfo object.
+
+        Return:
+            dict:
+                The dictionary keyed by property name, returning each rule-defined
+                property value associated with this object.
+        """
 
         if self.__rule_values is None:
             self.__rule_values = Rule.apply_all(self._basename)
@@ -106,7 +126,13 @@ class _KernelInfo(object):
 
     @property
     def _default_values(self):
-        """Default rule values as a dictionary."""
+        """The default rule values for with this _KernelInfo object.
+
+        Return:
+            dict:
+                The dictionary keyed by property name, returning each default property
+                value associated with this object.
+        """
 
         if self.__default_values is None:
             if _KernelInfo._USE_DEFAULT_RULES:
@@ -118,45 +144,98 @@ class _KernelInfo(object):
 
     @property
     def abspath(self):
-        """Absolute path to this kernel file; an empty string if this file doesn't exist.
+        """Absolute path to this kernel file.
+
+        If the file does not exist on the local filesystem, an empty string is returned.
+
+        Return:
+            str:
+                The absolute path on the local filesystem to this kernel file, or an empty
+                string if there is no local copy of this kernel file.
         """
         return _KernelInfo.ABSPATHS.get(self._basename, '')
 
     @property
     def exists(self):
-        """True if this kernel file exists."""
+        """True if this kernel file exists on the local filesystem.
+
+        Return:
+            bool: True if this kernel file exists on the local filesystem.
+        """
         return self._basename in _KernelInfo.ABSPATHS
 
     @property
     def is_known(self):
-        """True if this kernel file basename has been defined; it might not exist as a
-        local file.
+        """True if information about this kernel file basename has been defined.
+
+        A basename is defined if any information about it has been registered, even if
+        there is no local copy on the filesystem.
+
+        Return:
+            bool: True if information about this kernel file basename has been defined.
         """
         return self._basename in _KernelInfo.KERNELINFO
 
     @property
     def ext(self):
-        """The file extension, after the period."""
+        """The file extension from the basename of the file described by this _KernelInfo
+        object.
+
+        The period is included as the first character.
+
+        Return:
+            str:
+                The file extension from the basename of the file described by this object,
+                starting with the period.
+        """
         return self._ext
 
     @property
     def ktype(self):
-        """Kernel type of this file: "SPK", "CK", "LSK", etc."""
+        """The kernel type of the file described by this _KernelInfo object: "SPK", "CK",
+        "LSK", etc.
+
+        Return:
+            str: The kernel type of this object: "SPK", "CK", "LSK", etc.
+        """
         return self._ktype
 
     @property
     def is_text(self):
-        """True if this is a text kernel file."""
+        """True if this _KernelInfo object describes a text kernel file; False if it
+        describes a binary kernel file.
+
+        Return:
+            bool:
+                True if this describes a text kernel file; False if it describes a binary
+                kernel file.
+        """
         return self._ext[1] == 't'
 
     @property
     def is_binary(self):
-        """True if this is a binary kernel file."""
+        """True if this _KernelInfo object describes a binary kernel file; False if it
+        describes a text kernel file.
+
+        Return:
+            bool:
+                True if this describes a binary kernel file; False if it describes a text
+                kernel file.
+        """
         return self._ext[1] == 'b'
 
     @property
     def label_abspath(self):
-        """Absolute path to a label file, if any; blank otherwise."""
+        """The absolute path to the PDS label of the kernel file described by this
+        _KernelInfo object.
+
+        If the file does not have a PDS label, an empty string is returned.
+
+        Return:
+            str:
+                The absolute path to the PDS label of the kernel file described by this
+                object, if any; an empty string otherwise.
+        """
 
         if self._label_abspath is None:
             if not self.abspath:
@@ -175,7 +254,16 @@ class _KernelInfo(object):
 
     @property
     def label(self):
-        """Content of the PDS label, if any, as a list of strings."""
+        """The content of the PDS label associated with this _KernelInfo object's kernel
+        file, if any, expressed as a list of strings.
+
+        The value is an empty list if there is no label file.
+
+        Return:
+            list[str, ...]:
+                Content of the PDS label associated with this object's kernel file. If the
+                file has no label, the list is empty.
+        """
 
         if self._label is None:
             if not self.abspath:
@@ -191,7 +279,13 @@ class _KernelInfo(object):
 
     @property
     def comments(self):
-        """Any available comments as a list of strings."""
+        """Any available comments from the kernel file associated with this _KernelInfo
+        object, expressed as a list of strings.
+
+        Return:
+            list[str, ...]:
+                Any comments about the kernel file associated with this object.
+        """
 
         if self._comments is None:
             if not self.abspath:
@@ -237,8 +331,15 @@ class _KernelInfo(object):
 
     @property
     def text(self):
-        """Content of a text kernel as a list of strings; an empty list for a binary
-        kernel.
+        """Content of the text kernel file associated with this _KernelInfo object,
+        expressed as a list of strings.
+
+        If this object describes a binary kernel file, the returned list is empty.
+
+        Return:
+            list[str, ...]:
+                The full content of the text kernel file described by this object if it is
+                a texxt kernel; an empty list if the kernel file is binary.
         """
 
         if self._text is None:
@@ -255,8 +356,15 @@ class _KernelInfo(object):
 
     @property
     def text_content(self):
-        """Data content of a text kernel as a list of strings; an empty list for a binary
-        kernel.
+        """The data lines from the text kernel file described by this _KernelInfo object,
+        expressed as a list of strings.
+
+        If this object describes a binary kernel file, the returned list is empty.
+
+        Return:
+            list[str, ...]:
+                All data lines from the text kernel file described by this object; an
+                empty list if the kernel file is binary.
         """
 
         if self._text_content is None:
@@ -286,8 +394,15 @@ class _KernelInfo(object):
 
     @property
     def text_comments(self):
-        """All comments embedded within a text kernel as a list of strings; an empty list
-        for a binary kernel.
+        """All comment lines from the text kernel file described by this object, expressed as
+        a list of strings.
+
+        If this object describes a binary kernel file, the returned list is empty.
+
+        Return:
+            list[str, ...]:
+                All comment lines from the text kernel file described by this object; an
+                empty list if the kernel file is binary.
         """
 
         if self._text_comments is None:
@@ -297,7 +412,17 @@ class _KernelInfo(object):
 
     @property
     def dict_content(self):
-        """Content of this text kernel as parsed into a dictionary."""
+        """The content of the text kernel described by this _KernelInfo object as parsed
+        into a dictionary by text_kernel.from_file().
+
+        If this object describes a binary kernel, the dictionary is empty.
+
+        Return:
+            dict:
+                The content of the text kernel described by this object as parsed into a
+                dictionary. If this object describes a binary kernel, the dictionary is
+                empty.
+        """
 
         if self._dict_content is None:
             if not self.abspath:
@@ -317,9 +442,14 @@ class _KernelInfo(object):
 
     @property
     def naif_ids(self):
-        """The set of all NAIF IDs, including aliases, described by the file.
+        """The NAIF IDs covered by the associated kernel file, including aliases.
 
-        If this kernel applies to all NAIF IDs, return an empty set.
+        If the kernel file is associated with all NAIF IDs, such as if it is a leapseconds
+        kernel, the set is empty.
+
+        Return:
+            set[int]:
+                The NAIF IDs covered by the associated kernel file, including aliases.
         """
 
         if self._naif_ids is not None:
@@ -396,7 +526,12 @@ class _KernelInfo(object):
 
     @naif_ids.setter
     def naif_ids(self, ids):
-        """Define the set of NAIF IDs for this object."""
+        """Define the set of NAIF IDs for this _KernelInfo object.
+
+        Args:
+            ids (int or collection[int]):
+                The set of NAIF IDs for this object.
+        """
 
         if isinstance(ids, numbers.Integral):
             self._naif_ids = {ids}
@@ -411,7 +546,12 @@ class _KernelInfo(object):
         self._manual_defs.append(('_naif_ids', self._naif_ids))
 
     def add_naif_ids(self, *ids):
-        """Add one or more NAIF IDs to the set."""
+        """Add one or more NAIF IDs to this _KernelInfo object.
+
+        Args:
+            *ids (ints):
+                One or more NAIF IDs to add to this object.
+        """
 
         ids = set(ids)
         self._naif_ids_as_found |= ids
@@ -420,7 +560,12 @@ class _KernelInfo(object):
         self._manual_defs.append(('add_naif_ids',) + ids)
 
     def remove_naif_ids(self, *ids):
-        """Remove one or more NAIF IDs from the set."""
+        """Remove one or more NAIF IDs to this _KernelInfo object.
+
+        Args:
+            *ids (ints):
+                One or more NAIF IDs to remove from this object.
+        """
 
         ids = set(ids)
         self._naif_ids_as_found -= ids
@@ -430,7 +575,15 @@ class _KernelInfo(object):
 
     @property
     def naif_ids_wo_aliases(self):
-        """The set of all NAIF IDs described by the file, excluding aliases."""
+        """The NAIF IDs covered by the associated kernel file, excluding aliases.
+
+        If the kernel file is associated with all NAIF IDs, such as if it is a leapseconds
+        kernel, the set is empty.
+
+        Return:
+            set[int]:
+                The NAIF IDs covered by the associated kernel file, excluding aliases.
+        """
 
         if self._naif_ids_wo_aliases is None:
             _ = self.naif_ids
@@ -439,7 +592,16 @@ class _KernelInfo(object):
 
     @property
     def naif_ids_as_found(self):
-        """The exact set of NAIF IDs described by the file, before handing aliases."""
+        """The exact set of NAIF IDs covered by the associated kernel file, before
+        processing to handle aliases.
+
+        If the kernel file refers to the alias of a NAIF ID, that alias is in the returned
+        set rather than the updated ID.
+
+        Return:
+            set[int]:
+                The NAIF IDs covered by the associated kernel file.
+        """
 
         if self._naif_ids_as_found is None:
             _ = self.naif_ids
@@ -450,7 +612,13 @@ class _KernelInfo(object):
     _SCLK_DATA_TYPE = re.compile(r' *SCLK_DATA_TYPE_(\d+)', re.I)
 
     def _naif_ids_from_text_kernel(self):
-        """Internal method to extract the set of NAIF IDs from any text kernel."""
+        """Internal method to extract the set of NAIF IDs from this _KernelInfo object's
+        associated text kernel file.
+
+        Return:
+            set[int]:
+                The NAIF IDs covered by the associated kernel file.
+        """
 
         naif_ids = set()
 
@@ -499,12 +667,23 @@ class _KernelInfo(object):
 
     @property
     def time(self):
-        """Time limits as a tuple of two times in seconds TDB.
+        """Time limits of this _KernelInfo object.
 
-        The kernel might have gaps in time coverage, but it must not have any
-        applicability before the earliest time or after the latest.
+        For binary kernels, this is a tuple of two floats in seconds TDB, where the first
+        time is the earliest time limit within the file and the second is the latest time
+        limit within the file. Note that a kernel might have gaps in time coverage, or it
+        might cover different NAIF IDs using different limits. Nevertheless, a kernel file
+        will never have any applicability before the first time or after the second time.
 
-        For kernels with no time dependence, the interval Kernel.ALL_TIME is returned.
+        For kernels with no time dependence, such as a text kernel, the interval (None,
+        None) is returned.
+
+        Return:
+            (float, float) or (None, None):
+                A tuple of two floats in seconds TDB, where the first time is the earliest
+                time limit within the object's associated kernel file and the second is
+                the latest time within the file. If a file has no time dependence, (None,
+                None) is returned.
         """
 
         if self._time is not None:
@@ -590,13 +769,19 @@ class _KernelInfo(object):
         return self._time
 
     @time.setter
-    def time(self, tmin_tmax):
-        """Define the time range of this kernel file.
+    def time(self, times):
+        """Define the time range of this _KernelInfo object using a tuple of two input
+        values.
 
-        Dates can be specified by ISO-format string or number of seconds TDB.
+        Each of the times can be specified by an ISO-format date string or by a number of
+        seconds TDB.
+
+        Args:
+            times ((float, int, or str, float, int, or str)):
+                The start and stop times of this object.
         """
 
-        (tmin, tmax) = tmin_tmax
+        (tmin, tmax) = times
 
         if isinstance(tmin, str):
             tmin = julian.tdb_from_iso(tmin)
@@ -619,7 +804,15 @@ class _KernelInfo(object):
 
     @property
     def release_date(self):
-        """Release date as an ISO date string "yyyy-mm-dd"; empty string if unavailable.
+        """The release date of this _KernelInfo object as an ISO date string of the form
+        "yyyy-mm-dd".
+
+        If the release date is unknown, an empty string is returned.
+
+        Return:
+            str:
+                This object's release date as an ISO date string of the form "yyyy-mm-dd";
+                if the release date is unknown, an empty string is returned.
         """
 
         if self._release_date is not None:
@@ -697,7 +890,15 @@ class _KernelInfo(object):
 
     @release_date.setter
     def release_date(self, date):
-        """Define the release date for this kernel file."""
+        """Set the release date for this _KernelInfo object.
+
+        Use None if the release date is unknown.
+
+        Args:
+            date (str or None):
+                The release date in a nearly arbitrary date-time format; use None or an
+                empty string if the release date is unknown.
+        """
 
         self._release_date = validate_release_date(date)
         self._manual_defs.append(('_release_date', self._release_date))
@@ -708,8 +909,14 @@ class _KernelInfo(object):
 
     @property
     def version(self):
-        """Version of this kernel file as a string, integer, tuple of integers, or set
-        of one or more of the above; "" if unavailable.
+        """The version identifier of this _KernelInfo object, or an empty string if the
+        file has no associated version.
+
+        Returns:
+            (int, str, tuple[int, ...]):
+                The version of this object or an empty string if the version is undefined.
+                A version using decimal points (e.g., 1.2.3) is represented by a tuple of
+                ints.
         """
 
         if self._version is not None:
@@ -739,7 +946,11 @@ class _KernelInfo(object):
 
     @property
     def family(self):
-        """Family name applicable to this kernel file; "" if unavailable."""
+        """Family name applicable to this kernel file; "" if unavailable.
+
+        Returns:
+            xxx: xxx
+        """
 
         if self._family is not None:
             return self._family
@@ -804,7 +1015,11 @@ class _KernelInfo(object):
 
     @property
     def properties(self):
-        """The dictionary of special properties for this kernel file."""
+        """The dictionary of special properties for this kernel file.
+
+        Returns:
+            xxx: xxx
+        """
 
         if self._rule_properties is None:
             self._rule_properties = {}
@@ -820,13 +1035,22 @@ class _KernelInfo(object):
         return self._properties
 
     def add_property(self, name, value):
-        """Add or modify a property, same as "self.properties[name] = value"."""
+        """Add or modify a property, same as "self.properties[name] = value".
+
+        Args:
+            name (xxx): Xxx
+            value (xxx): Xxx
+        """
 
         super(_KernelInfo._local_dict, self.properties).__setitem__(name, value)
         self._manual_defs.append(('add_property', name, value))
 
     def remove_property(self, name):
-        """Remove a property, same as "del self.properties[name]"."""
+        """Remove a property, same as "del self.properties[name]".
+
+        Args:
+            name (xxx): Xxx
+        """
 
         super(_KernelInfo._local_dict, self.properties).__delitem__(name)
         self._manual_defs.append(('remove_property', name))
@@ -839,6 +1063,9 @@ class _KernelInfo(object):
     def meta_basenames(self):
         """The list of enclosed basenames if this is a metakernel; an empty list
         otherwise.
+
+        Returns:
+            xxx: xxx
         """
 
         if self._meta_basenames is None:
@@ -861,9 +1088,9 @@ class _KernelInfo(object):
     def match(pattern, flags=re.I):
         """The set of existing basenames that match the given regular expression.
 
-        Input:
-            pattern     regular expression as a string or re.Pattern object.
-            flags       compile flags to use if the pattern is a string.
+        Args:
+            pattern (xxx): Regular expression as a string or re.Pattern object.
+            flags (RegexFlag, optional): Compile flags to use if the pattern is a string.
         """
 
         if isinstance(pattern, str):
@@ -873,7 +1100,12 @@ class _KernelInfo(object):
 
     @staticmethod
     def replace(basename, abspath):
-        """Replace an existing KernelFile with the same basename."""
+        """Replace an existing KernelFile with the same basename.
+
+        Args:
+            basename (xxx): Xxx
+            abspath (xxx): Xxx
+        """
 
         manual_defs = _KernelInfo.KERNELINFO[basename]._manual_defs
         del _KernelInfo.KERNELINFO[basename]

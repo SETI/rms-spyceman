@@ -41,6 +41,12 @@ def format_time(tdb):
 
     Usually Y-M-D-H-M-S format, but uses floating-point seconds TDB for dates outside the
     range of four-digit years. Also, "None" if the time is None.
+
+    Args:
+        tdb (xxx): Xxx
+
+    Returns:
+        xxx: xxx
     """
 
     if tdb is None:
@@ -61,7 +67,15 @@ def format_time(tdb):
 
 
 def print_ktuple(basename, out=None):
-    """Print the "KTuple" info for one KernelFile object."""
+    """Print the "KTuple" info for one KernelFile object.
+
+    Args:
+        basename (xxx): Xxx
+        out (xxx, optional): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     out = out or sys.stdout
 
@@ -153,7 +167,14 @@ def summarize_kernels(paths, pattern=None, ktype=None, out=None, known=set()):
 
 
 def new_version(path):
-    """The given path with an unused version number appended."""
+    """The given path with an unused version number appended.
+
+    Args:
+        path (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     version_root = path.name[:-3] + '_v'
     versions = list(v for v in path.parent.iterdir() if v.name.startswith(version_root))

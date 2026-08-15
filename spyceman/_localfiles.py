@@ -22,11 +22,12 @@ _WARNED = False         # True if a warning has been issued
 def initialize(option='warn'):
     """Walk the list of directories defined by environment variable "SPICEPATH".
 
-    Input:
-        option      how to handle a missing SPICEPATH environment variable:
-                        "ignore"        ignore it;
-                        "warn"          issue a warning;
-                        "error"         raise a RuntimeError.
+    Args:
+        option (str, optional):
+            How to handle a missing SPICEPATH environment variable:
+            "ignore"        ignore it;
+            "warn"          issue a warning;
+            "error"         raise a RuntimeError.
     """
 
     global _INITIALIZED, _WARNED
@@ -67,6 +68,11 @@ def walk(*directories, translator=None, override=False):
     If override is True, then the latest file found with a given basename is the one
     used; otherwise, a warning is issued each time a kernel file is found that has
     different content but the same basename as one previously found.
+
+    Args:
+        *directories (xxx): Xxx
+        translator (xxx, optional): Xxx
+        override (bool, optional): Xxx
     """
 
     for directory in directories:
@@ -97,7 +103,14 @@ def use_path(path, newname=None, override=False, ignore=False):
 
     If ignore is True, then files not recognized as SPICE kernels are ignored
     silently; otherwise, a ValueError is raised.
+
+    Args:
+        path (xxx): Xxx
+        newname (xxx, optional): Xxx
+        override (bool, optional): Xxx
+        ignore (bool, optional): Xxx
     """
+#xxx Insert "*"?
 
     path = pathlib.Path(path)
 
@@ -180,7 +193,14 @@ def use_paths(*paths, translator=None, override=False, ignore=False):
 
     If ignore is True, then files not recognized as SPICE kernels are ignored
     silently; otherwise, an error is raised.
+
+    Args:
+        *paths (xxx): Xxx
+        translator (xxx, optional): Xxx
+        override (bool, optional): Xxx
+        ignore (bool, optional): Xxx
     """
+#xxx Insert "*"?
 
     for path in paths:
         path = pathlib.Path(path)
@@ -196,7 +216,14 @@ def use_paths(*paths, translator=None, override=False, ignore=False):
 
 
 def _file_checksum(filepath):
-    """Adler 32 checksum of a file."""
+    """Adler 32 checksum of a file.
+
+    Args:
+        filepath (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     filepath = pathlib.Path(filepath)
 
@@ -212,7 +239,15 @@ def _file_checksum(filepath):
 
 
 def _compare_tks(old_filepath, new_filepath):
-    """Compare the data content of two text kernels. Can be slow."""
+    """Compare the data content of two text kernels. Can be slow.
+
+    Args:
+        old_filepath (xxx): Xxx
+        new_filepath (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     old_tkdict = textkernel.from_file(old_filepath)
     new_tkdict = textkernel.from_file(new_filepath)
@@ -220,7 +255,14 @@ def _compare_tks(old_filepath, new_filepath):
 
 
 def _is_metakernel(filepath):
-    """True if this file is a metakernel."""
+    """True if this file is a metakernel.
+
+    Args:
+        filepath (xxx): Xxx
+
+    Returns:
+        xxx: xxx
+    """
 
     is_metakernel = False
 

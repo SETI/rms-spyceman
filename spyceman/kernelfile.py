@@ -98,11 +98,21 @@ class KernelFile(Kernel):
     def __init__(self, basename, exists=False, **properties):
         """Construct a KernelFile object.
 
-        Input:
-            basename    basename of a SPICE kernel file, or else a KernelFile object.
-            exists      if True, this file is required to exist locally.
-            name=value  optionally, set the attribute(s) or property identified by name to
-                        the specified value.
+        Args:
+            basename (str or KernelFile):
+                Basename of a SPICE kernel file or else a KernelFile object.
+            exists (bool, optional):
+                If True, this file must exist on the local filesystem. Note that a
+                KernelFile object can refer to a non-existent file, although it cannot be
+                furnished until a local copy exists.
+            **properties (optional):
+                Names and values of additional attributes or property values to be
+                assigned to the returned KernelFile.
+
+        Return:
+            KernelFile:
+                The newly constructed KernelFile object. If a KernelFile object was given
+                as `basename`, this will be a copy.
         """
 
         if isinstance(basename, KernelFile):
@@ -122,10 +132,11 @@ class KernelFile(Kernel):
     def must_exist(self, source='', dest='', verbose=True):
         """Ensure that this file exists locally.
 
-        Input:
-            source      optional override to the default source URL(s).
-            dest        optional override to the default local destination.
-            verbose     True to print information about downloads.
+        Args:
+            source (str, optional): Override to the default source URL(s).
+            dest (str, optional): Override to the default local destination directory.
+            verbose (bool, optional):
+                True to print information about downloads as they occur.
         """
 
         if self.exists:
@@ -174,14 +185,14 @@ class KernelFile(Kernel):
 
     @staticmethod
     def set_info(info, **properties):
-        """Initialize info about one or more KernelFiles.
+        """Set attributes or properties of one or more KernelFiles.
 
-        Input:
-            info        a KernelFile, KTuple or basename, or a list thereof. If it is a
-                        KTuple, the time limits, set of NAIF IDs, and release date are
-                        also defined.
-            name=value  zero or more additional attributes or properties and their values.
-                        These values will be assigned to each kernel listed.
+        Args:
+            info (KernelFile, KTuple, basename, or list[KernelFile, KTuple, or basename]):
+                Object(s) for which attributes or properties are to be defined.
+            **properties:
+                Names and values of attributes or property values to be assigned to these
+                objects.
         """
 
         if not isinstance(info, list):
@@ -215,27 +226,34 @@ class KernelFile(Kernel):
 
     @property
     def _info(self):
-        """The _KernelInfo object for this basename, constructed anew if necessary."""
+        """The _KernelInfo object associated with this KernelFile object's basename.
+
+        This is a property and is constructed anew if necessary.
+        """
         return _KernelInfo.lookup(self._basename)
 
     @property
     def basenames(self):
-        """Ordered list of all the kernel basenames associated with this Kernel."""
+        """list[str]: All the kernel file basenames associated with this Kernel object.
+        """
         return [self.basenames]
 
     @property
     def name(self):
-        """The name for this kernel, always equivalent to its basename."""
+        """str: The name of this Kernel object.
+
+        For KernelFile objects, this is always equivalent to its basename.
+        """
         return self.basename
 
     @property
     def ktype(self):
-        """Kernel type of this file: "SPK", "CK", "LSK", etc."""
+        """str: The kernel type of this file: "SPK", "CK", "LSK", etc."""
         return self._info.ktype
 
     @property
     def naif_ids(self):
-        """The set of NAIF IDs covered by this file, including aliases; an empty set if
+        """set[int]: set of NAIF IDs covered by this file, including aliases; an empty set if
         the kernel applies to all NAIF IDs.
         """
         return self._info.naif_ids
@@ -245,27 +263,46 @@ class KernelFile(Kernel):
         self._info.naif_ids = ids
 
     def add_naif_ids(self, *ids):
-        """Add one or more NAIF IDs to this KernelFile."""
+        """Add one or more NAIF IDs to this KernelFile.
+
+        Args:
+            *ids (ints): One or more NAIF IDs.
+        """
         self._info.add_naif_ids(*ids)
 
     def remove_naif_ids(self, *ids):
-        """Remove one or more NAIF IDs from this KernelFile."""
+        """Remove one or more NAIF IDs from this KernelFile.
+
+        Args:
+            *ids (ints): One or more NAIF IDs
+        """
         self._info.remove_naif_ids(*ids)
 
     @property
     def naif_ids_wo_aliases(self):
-        """The set of all NAIF IDs described by the file, excluding aliases."""
+        """The set of all NAIF IDs described by the file, excluding aliases.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.naif_ids_wo_aliases
 
     @property
     def naif_ids_as_found(self):
-        """The exact set of all NAIF IDs described by the file before handling aliases."""
+        """The exact set of all NAIF IDs described by the file before handling aliases.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.naif_ids_as_found
 
     @property
     def time(self):
         """Time limits as a tuple of two times in seconds TDB; (None,None) if this kernel
         is applicable to all times.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.time
 
@@ -277,6 +314,9 @@ class KernelFile(Kernel):
     def tmin(self):
         """The lower time limit of this file in seconds TDB; None if this kernel is
         applicable to all times.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.time[0]
 
@@ -284,6 +324,9 @@ class KernelFile(Kernel):
     def tmax(self):
         """The upper time limit of this file in seconds TDB; None if this kernel is
         applicable to all times.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.time[1]
 
@@ -291,6 +334,9 @@ class KernelFile(Kernel):
     def release_date(self):
         """Release date as an ISO date string "yyyy-mm-dd", or "" if no release date is
         known.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.release_date
 
@@ -305,13 +351,20 @@ class KernelFile(Kernel):
     def version(self):
         """Version of this kernel file as a string, integer, or tuple of integers, or
         a set containing multiple versions. If the file has no version, the value is "".
+
+        Returns:
+            xxx: xxx
         """
         return self._info.version
 
     @property
     def version_as_set(self):
         """Version(s) of this kernel file as a set containing strings, integers, or tuples
-        of integers."""
+        of integers.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.version_as_set
 
     @version.setter
@@ -322,6 +375,9 @@ class KernelFile(Kernel):
     def family(self):
         """The family name of this kernel. Typically, kernels with a different version
         or time range often are members of the same family.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.family
 
@@ -331,7 +387,11 @@ class KernelFile(Kernel):
 
     @property
     def source(self):
-        """One or more URLs to search for this file online."""
+        """One or more URLs to search for this file online.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.source
 
     @source.setter
@@ -342,6 +402,9 @@ class KernelFile(Kernel):
     def dest(self):
         """The sub-path within a SPICE kernel download directory where this file will be
         located upon download.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.dest
 
@@ -351,15 +414,28 @@ class KernelFile(Kernel):
 
     @property
     def properties(self):
-        """The dictionary of special properties for this Kernel."""
+        """The dictionary of special properties for this Kernel.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.properties
 
     def add_property(self, name, value):
-        """Add or modify a property, same as "self.properties[name] = value"."""
+        """Add or modify a property, same as "self.properties[name] = value".
+
+        Args:
+            name (xxx): Xxx
+            value (xxx): Xxx
+        """
         self._info.add_property(name, value)
 
     def remove_property(self, name):
-        """Remove a property, same as "del self.properties[name]"."""
+        """Remove a property, same as "del self.properties[name]".
+
+        Args:
+            name (xxx): Xxx
+        """
         self._info.remove_property(name)
 
     ######################################################################################
@@ -369,60 +445,101 @@ class KernelFile(Kernel):
     @property
     def abspath(self):
         """Absolute path to this KernelFile; an empty string if this file doesn't exist.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.abspath
 
     @property
     def exists(self):
-        """True if this kernel file exists."""
+        """True if this kernel file exists.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.exists
 
     @property
     def is_known(self):
         """True if this kernel file basename has been defined; it might not exist as a
         local file.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.is_known
 
     @property
     def ext(self):
-        """File extension of this file."""
+        """File extension of this file.
+
+        Returns:
+            xxx: xxx
+        """
         return '.' + self.basename.rpartition('.')[-1]
 
     @property
     def is_text(self):
-        """True if this is a text kernel file."""
+        """True if this is a text kernel file.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.is_text
 
     @property
     def is_binary(self):
-        """True if this is a binary kernel file."""
+        """True if this is a binary kernel file.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.is_binary
 
     @property
     def checksum(self):
-        """Adler 32 checksum of the file."""
+        """Adler 32 checksum of the file.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.checksum
 
     @property
     def label_abspath(self):
-        """Absolute path to a label file, if any; blank otherwise."""
+        """Absolute path to a label file, if any; blank otherwise.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.label_abspath
 
     @property
     def label(self):
-        """Content of the PDS label, if any, as a list of strings."""
+        """Content of the PDS label, if any, as a list of strings.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.label
 
     @property
     def comments(self):
-        """Any available comments as a list of strings."""
+        """Any available comments as a list of strings.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.comments
 
     @property
     def text(self):
         """Content of a text kernel as a list of strings; an empty list for a binary
         kernel.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.text
 
@@ -430,6 +547,9 @@ class KernelFile(Kernel):
     def text_content(self):
         """Data content of a text kernel as a list of strings; an empty list for a binary
         kernel.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.text_content
 
@@ -437,18 +557,28 @@ class KernelFile(Kernel):
     def text_comments(self):
         """All comments embedded within a text kernel as a list of strings; an empty list
         for a binary kernel.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.text_comments
 
     @property
     def dict_content(self):
-        """Content of this text kernel as parsed into a textkernel dictionary."""
+        """Content of this text kernel as parsed into a textkernel dictionary.
+
+        Returns:
+            xxx: xxx
+        """
         return self._info.dict_content
 
     @property
     def meta_basenames(self):
         """The list of enclosed basenames if this is a metakernel; an empty list
         otherwise.
+
+        Returns:
+            xxx: xxx
         """
         return self._info.meta_basenames
 
@@ -468,6 +598,9 @@ class KernelFile(Kernel):
 
         Return:         the reduced list of basenames or KernelFiles.
         """
+#xxx Unknown docstring format
+#xxx Unknown arg name: tmin,
+#xxx Arg defined out of order: ids
 
         return_basenames = isinstance(basenames[0], str)
         kfiles = [KernelFile(b) if isinstance(b, str) else b for b in basenames]
@@ -538,40 +671,59 @@ class KernelFile(Kernel):
 
         If the input is a list, the filtered list returned will be in the same order.
 
-        Inputs:
-            basenames   a list of basenames or KernelFiles for which the filter is to be
-                        applied.
-            tmin, tmax  only include kernel files with times that overlap this time
-                        interval, specified as a date/time string or in TDB seconds.
-            ids         only include kernel files that refer to one or more of these NAIF
-                        IDs.
-            name        only include kernel files that match this basename or regular
-                        expression. Specify multiple values in a list, set, or tuple.
-                        Note: in this context, a string containing only only letters,
-                        numbers, underscore, dash ("-") and dot(".") is treated as a
-                        literal basename rather than as a match pattern.
-            version     only include kernel files that match this version. Use a set to
-                        specify multiple acceptable versions. Use a list of two values to
-                        specify the minimum and a maximum (inclusive) of acceptable range;
-                        in this case, either value can be None to enforce a minimum or a
-                        maximum version but not both.
-            release_date only include kernel files consistent with this release date. Use
-                        a list or tuple of two date strings defining the earliest and
-                        latest dates to include. Replace either date value with None or an
-                        empty string to ignore that constraint. A single date is treated
-                        as the upper limit on the release date.
-            expand      if True, the returned list of kernel files is expanded if
-                        necessary to ensure that the entire time range is covered for all
-                        of the specified NAIF IDs. In this case, some constraints on name,
-                        version, and release date might be violated.
-            reduce      If True, any kernel files whose coverage is eclipsed by other
-                        kernel files later in the list will be eliminated.
-            flags       compile flags to use on any regular expressions. Default is
-                        re.IGNORECASE.
-            name=value  any additional constraints on property values; kernel files with
-                        other values will be removed from the returned list. Place
-                        multiple values in a list, set, or tuple.
+        Args:
+            basenames (xxx):
+                A list of basenames or KernelFiles for which the filter is to be
+                applied.
+            tmin, (xxx):
+                Tmax  only include kernel files with times that overlap this time
+                interval, specified as a date/time string or in TDB seconds.
+            ids (xxx, optional):
+                Only include kernel files that refer to one or more of these NAIF
+                IDs.
+            name (xxx, optional):
+                Only include kernel files that match this basename or regular
+                expression. Specify multiple values in a list, set, or tuple.
+                Note: in this context, a string containing only only letters,
+                numbers, underscore, dash ("-") and dot(".") is treated as a
+                literal basename rather than as a match pattern.
+            version (xxx, optional):
+                Only include kernel files that match this version. Use a set to
+                specify multiple acceptable versions. Use a list of two values to
+                specify the minimum and a maximum (inclusive) of acceptable range;
+                in this case, either value can be None to enforce a minimum or a
+                maximum version but not both.
+            release_date (xxx, optional):
+                Only include kernel files consistent with this release date. Use
+                a list or tuple of two date strings defining the earliest and
+                latest dates to include. Replace either date value with None or an
+                empty string to ignore that constraint. A single date is treated
+                as the upper limit on the release date.
+            expand (bool, optional):
+                If True, the returned list of kernel files is expanded if
+                necessary to ensure that the entire time range is covered for all
+                of the specified NAIF IDs. In this case, some constraints on name,
+                version, and release date might be violated.
+            reduce (bool, optional):
+                If True, any kernel files whose coverage is eclipsed by other
+                kernel files later in the list will be eliminated.
+            flags (RegexFlag, optional):
+                Compile flags to use on any regular expressions. Default is
+                re.IGNORECASE.
+            name=value (xxx):
+                Any additional constraints on property values; kernel files with
+                other values will be removed from the returned list. Place
+                multiple values in a list, set, or tuple.
+            tmin (xxx, optional): Xxx
+            tmax (xxx, optional): Xxx
+            **properties (xxx): Xxx
+
+        Returns:
+            xxx: xxx
         """
+#xxx Unknown arg name: tmin,
+#xxx Unknown arg name: name=value
+#xxx Arg defined out of order: flags
 
         def filter_by_name(name, kfiles):
             if not name:
@@ -710,22 +862,30 @@ class KernelFile(Kernel):
         """The list of basenames matching a particular pattern and/or of a particular
         type.
 
-        Inputs:
-            pattern     if specified, only return basenames matching this name or pattern.
-                        Specify multiple names or regular expressions in a list, tuple, or
-                        set.
-            ktype       if specified, only basenames associated with this ktype will be
-                        returned. If the ktype can be inferred from the pattern, it is
-                        not necessary to specify it here.
-            exists      if True, only file basenames in the local file system are
-                        returned.
-            sort        definition of how to sort the returned basenames:
-                            "alpha"         sort alphabetically (default);
-                            "version"       sort by version;
-                            "date"          sort by release date;
-                            any function    sort using the return value of this function.
-            flags       the compile flags for the regular expression; default is
-                        re.IGNORECASE.
+        Args:
+            pattern (xxx, optional):
+                If specified, only return basenames matching this name or pattern.
+                Specify multiple names or regular expressions in a list, tuple, or
+                set.
+            ktype (xxx, optional):
+                If specified, only basenames associated with this ktype will be
+                returned. If the ktype can be inferred from the pattern, it is
+                not necessary to specify it here.
+            exists (bool, optional):
+                If True, only file basenames in the local file system are
+                returned.
+            sort (str, optional):
+                Definition of how to sort the returned basenames:
+                "alpha"         sort alphabetically (default);
+                "version"       sort by version;
+                "date"          sort by release date;
+                any function    sort using the return value of this function.
+            flags (RegexFlag, optional):
+                The compile flags for the regular expression; default is
+                re.IGNORECASE.
+
+        Returns:
+            xxx: xxx
         """
 
         sort_key = KernelFile.basename_sort_key(sort)
@@ -777,12 +937,21 @@ class KernelFile(Kernel):
             "version"       sort by version, then alphabetically;
             "date"          sort by release date, then alphabetically;
             any function    use this function as the sort key.
+
+        Args:
+            option (xxx): Xxx
         """
 
         def version_sort_key(basename):
             """Key for sorting versions. Integers and tuples of integers are sorted
             together. Strings sort as greater than integers or tuples. Missing versions
             sort lowest.
+
+            Args:
+                basename (xxx): Xxx
+
+            Returns:
+                xxx: xxx
             """
 
             version = KernelFile(basename).version
@@ -829,6 +998,10 @@ class KernelFile(Kernel):
 
         A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
         Vetos apply globally, taking effect any time a basename is furnished.
+
+        Args:
+            *patterns (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
         """
 
         patterns = KernelFile._compile(patterns, flags=flags, subs=False)
@@ -847,6 +1020,10 @@ class KernelFile(Kernel):
 
         A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
         Vetos apply globally, taking effect any time a basename is furnished.
+
+        Args:
+            *patterns (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
         """
 
         patterns = [KernelFile._compile(p, flags=flags, subs=False) for p in patterns]
@@ -875,6 +1052,11 @@ class KernelFile(Kernel):
 
         A veto is similar to an exclusion, but exclusions are specific to Kernel objects.
         Vetos apply globally, taking effect any time a basename is furnished.
+
+        Args:
+            patterns (xxx): Xxx
+            *vetos (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
         """
 
         patterns = KernelFile._compile(patterns, flags=flags, subs=False)
@@ -893,6 +1075,11 @@ class KernelFile(Kernel):
         Multiple "front" patterns can be specified inside a tuple, list, or set. If this
         input contains capturing sequences, these can be referenced in the "behind"
         patterns.
+
+        Args:
+            front (xxx): Xxx
+            *behind (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
         """
 
         front  = KernelFile._compile(front,  flags=flags)
@@ -908,6 +1095,14 @@ class KernelFile(Kernel):
 
         Patterns containing replacement patterns cannot be compiled; they are instead
         returned as tuples (string, flags).
+
+        Args:
+            patterns (xxx): Xxx
+            flags (RegexFlag, optional): Xxx
+            subs (bool, optional): Xxx
+
+        Returns:
+            xxx: xxx
         """
 
         if not isinstance(patterns, (list, set, tuple)):
@@ -932,7 +1127,15 @@ class KernelFile(Kernel):
 
     @staticmethod
     def _get_vetos_or_shadows(basename, source):
-        """The list of compiled regular expressions that match this basename."""
+        """The list of compiled regular expressions that match this basename.
+
+        Args:
+            basename (str): A kernel file basename.
+            source (xxx): Xxx
+
+        Returns:
+            xxx: xxx
+        """
 
         matches = []
         for item_list in source:
@@ -949,13 +1152,31 @@ class KernelFile(Kernel):
 
     @staticmethod
     def _get_vetos(basename):
-        """The list of compiled regular expressions that this basename vetos."""
+        """The list of compiled regular expressions that this basename vetos.
+
+        Args:
+            basename (str): A kernel file basename.
+
+        Return:
+            list[re.Pattern]:
+                All the compiled regular expressions that match basenames that the given
+                basename vetos.
+        """
 
         return KernelFile._get_vetos_or_shadows(basename, source=KernelFile._VETOS)
 
     @staticmethod
     def _get_shadows(basename):
-        """The list of compiled regular expressions that this basename shadows."""
+        """The regular expressions that this basename shadows.
+
+        Args:
+            basename (str): A kernel file basename.
+
+        Return:
+            list[re.Pattern]:
+                All the compiled regular expressions that match basenames that the given
+                basename shadows.
+        """
 
         return KernelFile._get_vetos_or_shadows(basename, source=KernelFile._SHADOWS)
 
