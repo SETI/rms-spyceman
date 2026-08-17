@@ -2,9 +2,11 @@ coverage:
   status:
     project:
       default:
-        # There is no test suite yet. Raise toward rms-polymath's 90% as tests land,
-        # keeping this in step with fail_under in pyproject.toml.
-        target: 0%
+        # A floor, not a target; kept in step with fail_under in pyproject.toml.
+        # Raise toward rms-polymath's 90% as tests land.
+        target: 30%
     patch:
       default:
+        # New code is not held to the project floor yet, because much of the package
+        # still has no behavioral tests to model a patch on.
         target: 0%

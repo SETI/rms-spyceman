@@ -2461,12 +2461,32 @@ fallback real and test it, or delete about forty lines that cannot currently run
 
 The document is closed, but the codebase is not finished. In rough order of value:
 
-1. **Behavioral tests for kernel selection.** The suite added in §12.5 is structural —
-   imports, pure helpers, docstring conformance. The selection logic in `_spicefunc` and
-   `Kernel.furnish()` is exercised only by ad-hoc harnesses, and it is where the subtle
-   defects lived: §6.20 was a kernel silently *not* furnished, which no exception would ever
-   have revealed. `fail_under` in `[tool.coverage.report]` and the `codecov.yml` targets
-   should rise as these land, not before.
+1. ~~**Behavioral tests for kernel selection.**~~ **Done 2026-08-17.**
+   `tests/test_selection.py` covers which kernels a generated selection function chooses —
+   time windows, NAIF IDs, basename and version and release-date constraints, exclusion,
+   precedence order, and the shape of the returned Kernel. `tests/test_furnish.py` covers
+   what is actually loaded and in what order, using `Kernel.debug(True)` so nothing reaches
+   SPICE or the network. Shared fixtures live in `tests/conftest.py`, which manages the two
+   pieces of global state that would otherwise make these order-dependent: `_KernelInfo`'s
+   process-wide basename registry, and the module-level furnish record and switches.
+
+   The tests were validated by mutation rather than by passing. Four defects were
+   reintroduced one at a time and the suite was re-run each time: reverting the §6.20 guard
+   (3 tests caught it), making `exclude` keep the lowest-precedence file instead of the
+   highest (1), dropping the exclusion of unselected files (1), reversing the furnish order
+   (4), and disabling time and ID filtering (8). None escaped.
+
+   Two of the tests were wrong on first writing, and both errors were mine rather than the
+   library's: an LSK required by an SPK is a *co*requisite, not a prerequisite, because
+   precedence only orders kernels of one ktype; and an exclusion belongs to a Kernel object
+   rather than to a basename, which is how a selection function attaches one to the result
+   it returns. Both distinctions are now tests in their own right. A third test passed for
+   the wrong reason — it used `ids=499` against an all-IDs kernel, which `id_overlap()`
+   already handled, so it never reached the §6.20 guard at all; the guard only fires when
+   *both* sides are empty. It was rewritten, and the mutation run is what exposed it.
+
+   `fail_under` and the `codecov.yml` project target are raised from 0 to 30, against an
+   actual 35.5%. Both are floors that catch a collapse rather than targets.
 2. **Re-enable ruff, starting from `select = ["F"]`.** §12.1 documents what it would have
    caught: the undefined names and unused imports that made up much of this review. The
    `per-file-ignores` were deleted rather than left inert, so they must be re-derived from a

@@ -48,6 +48,13 @@ the suite does.
 over every function in the package, including the 90-column limit. A new function without a
 conforming docstring fails the suite.
 
+`tests/test_selection.py` and `tests/test_furnish.py` cover which kernels get chosen and
+what gets loaded. They rely on fixtures in `tests/conftest.py`: `unique_name` because
+`_KernelInfo` keeps a process-wide registry that refuses to redefine a basename, and
+`spice_sandbox` because the furnish record and the debug/download switches are module-level
+state. **Assert on the exact basenames chosen or furnished**, never merely that a call
+returned — §6.20 was a kernel silently omitted while every call reported success.
+
 `mypy` and `stubtest` are switched off in `scripts/run-all-checks.sh` — the source
 carries no type annotations and there are no `.pyi` stubs.
 
@@ -66,10 +73,10 @@ gates continuation-line indentation.
 The disabled-rule note applies equally to the `md009`/`md012`/`md022`/`md032` PyMarkdown rules, which
 exist only because `README.md` and `CONTRIBUTING.md` have not been reformatted.
 
-`fail_under` in `[tool.coverage.report]` and the targets in `codecov.yml` are still 0. The
-suite added for critique §12.5 is structural — imports, pure helpers, and docstring
-conformance — so coverage of the kernel-selection logic remains thin. Raise the thresholds
-as behavioral tests land, not before.
+`fail_under` in `[tool.coverage.report]` and the project target in `codecov.yml` are 30,
+against an actual 35.5%. It is a floor that catches a collapse, not a target; raise it
+toward rms-polymath's 90 as more behavioral tests land. The codecov *patch* target is
+still 0, because much of the package has no behavioral tests for new code to model.
 
 ## Environment variables
 

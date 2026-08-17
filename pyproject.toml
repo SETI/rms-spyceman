@@ -56,9 +56,9 @@ testpaths = ["tests"]
 addopts = ["-n", "auto", "--cov=src/spyceman", "--strict-markers", "--strict-config",
            "-m", "not slow"]
 markers = [
-  # Importing spyceman.hosts.Cassini takes about 140 seconds, so the tests that import
-  # the large kernel catalogs are deselected by default. Run them with `pytest -m slow`.
-  "slow: imports a full kernel catalog; minutes rather than seconds",
+  # The tests that import a full kernel catalog are the slowest the suite has, so they
+  # are deselected by default. Run them with `pytest -m slow`.
+  "slow: imports a full kernel catalog; seconds rather than milliseconds",
 ]
 # Importing a host or solarsystem module issues warnings.warn() for unrecognized NAIF
 # bodies, so warnings are not errors here the way they are in rms-polymath.
@@ -107,8 +107,10 @@ exclude_lines = [
   "def __repr__",
   "raise NotImplementedError",
 ]
-# There is no test suite yet. Raise this toward rms-polymath's 90 as tests land.
-fail_under = 0
+# A floor, not a target. The behavioral tests for kernel selection put the whole suite
+# near 36%; this sits below that so ordinary work does not trip it, while a collapse in
+# coverage still fails the build. Raise it toward rms-polymath's 90 as tests land.
+fail_under = 30
 
 [tool.ruff]
 target-version = "py311"
