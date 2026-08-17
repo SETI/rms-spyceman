@@ -1,0 +1,190 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm[toml]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rms-spyceman"
+dynamic = ["version"]
+description = "Kernel manager for the SPICE toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "cspyce",
+  "numpy",
+  "portion",
+  "requests",
+  "rms-julian",
+  "rms-textkernel",
+]
+license = {text = "Apache-2.0"}
+authors = [
+  {name = "Ring-Moon Systems Node, SETI Institute", email = "matt@seti.org"}
+]
+maintainers = [
+  {name = "Ring-Moon Systems Node, SETI Institute", email = "matt@seti.org"}
+]
+keywords = ["spyceman", "spice", "kernel", "naif", "ephemeris"]
+classifiers = [
+  # Downgrade once the package imports cleanly and has a released version.
+  "Development Status :: 2 - Pre-Alpha",
+  "Natural Language :: English",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Utilities",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows"
+]
+
+[project.urls]
+Homepage = "https://github.com/SETI/rms-spyceman"
+Documentation = "https://rms-spyceman.readthedocs.io/en/latest"
+Repository = "https://github.com/SETI/rms-spyceman"
+Source = "https://github.com/SETI/rms-spyceman"
+Issues = "https://github.com/SETI/rms-spyceman/issues"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+testpaths = ["tests"]
+addopts = ["-n", "auto", "--cov=src/spyceman", "--strict-markers", "--strict-config",
+           "-m", "not slow"]
+markers = [
+  # Importing spyceman.hosts.Cassini takes about 140 seconds, so the tests that import
+  # the large kernel catalogs are deselected by default. Run them with `pytest -m slow`.
+  "slow: imports a full kernel catalog; minutes rather than seconds",
+]
+# Importing a host or solarsystem module issues warnings.warn() for unrecognized NAIF
+# bodies, so warnings are not errors here the way they are in rms-polymath.
+filterwarnings = ["default"]
+
+[tool.setuptools]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+write_to = "src/spyceman/_version.py"
+
+[project.optional-dependencies]
+dev = [
+  "coverage>=7.0",
+  "flake8",
+  "pip-audit>=2.7",
+  "pymarkdownlnt>=0.9.35",
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "pytest-xdist>=3.8.0",
+  "ruff>=0.8",
+  "pyroma>=4.2",
+  "rms-spyceman[docs]",
+]
+docs = [
+  "myst-parser",
+  "sphinx>=7",
+  "sphinxcontrib-mermaid",
+  "sphinx-rtd-theme",
+]
+
+# Tool configuration
+
+[tool.coverage.run]
+branch = true
+parallel = true
+# Must match --cov in the pytest addopts above, or fail_under measures something else
+source = ["src/spyceman"]
+omit = ["tests/*", "_version.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise NotImplementedError",
+]
+# There is no test suite yet. Raise this toward rms-polymath's 90 as tests land.
+fail_under = 0
+
+[tool.ruff]
+target-version = "py311"
+# rms-polymath pins this to max-line-length in .flake8. This repo's .flake8 disables
+# E501 outright, but 90 is the de-facto limit: the banner comments are 90 characters
+# wide and the source is written to them.
+line-length = 90
+exclude = [
+  # Machine-generated KTuple tables emitted by programs/ktupler.py. They are
+  # regenerated, not edited, so linting them would only produce noise.
+  "src/spyceman/**/_[A-Z0-9_]*.py",
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+# ---------------------------------------------------------------------------------------
+# RUFF IS DISABLED FOR THE TIME BEING.
+#
+# An empty `select` means no rule is enabled, so `ruff check` reports nothing and exits
+# zero. The runner in scripts/run-all-checks.sh and the CI job in
+# .github/workflows/run-tests.yml are both switched off to match; turning ruff back on
+# means restoring all three.
+#
+# To re-enable, restore a rule list here. "F" (Pyflakes) alone is the right starting
+# point: it finds undefined names and unused imports, and nothing else. The categories
+# available are E, W = pycodestyle errors/warnings; F = Pyflakes; I = isort;
+# UP = pyupgrade; B = bugbear; SIM = simplify; C4 = comprehensions; A = builtins;
+# N = pep8-naming; PT = pytest-style; RUF = Ruff-specific.
+#
+# The per-file-ignores that used to live here have been removed rather than left inert.
+# Each one named a specific defect, and a stale suppression is worse than none: it
+# silently exempts a file long after the bug it described is gone. Re-derive them from a
+# clean run when ruff is switched back on.
+# ---------------------------------------------------------------------------------------
+select = []
+
+[tool.pymarkdown.plugins.md013]
+# Line length (disable so README/CONTRIBUTING can use longer lines).
+enabled = false
+
+[tool.pymarkdown.plugins.md033]
+# Inline HTML (e.g. <br>) allowed in Markdown.
+enabled = false
+
+[tool.pymarkdown.plugins.md025]
+# Multiple top-level headings.
+enabled = false
+
+[tool.pymarkdown.plugins.md041]
+# First line must be a top-level heading.
+enabled = false
+
+[tool.pymarkdown.plugins.md046]
+# Code block style. The README indents its examples by eight spaces rather than
+# fencing them, and the README is not being modified.
+enabled = false
+
+# The four rules below are disabled only because README.md and CONTRIBUTING.md predate
+# this configuration and were not modified in this pass. Re-enable each one after
+# reformatting those two files.
+
+[tool.pymarkdown.plugins.md009]
+# Trailing spaces (CONTRIBUTING.md:102).
+enabled = false
+
+[tool.pymarkdown.plugins.md012]
+# Multiple consecutive blank lines. Both files use two blank lines before every
+# heading, and README.md has a six-line gap at line 76.
+enabled = false
+
+[tool.pymarkdown.plugins.md022]
+# Blank lines around headings; the same two-blank-line habit as above.
+enabled = false
+
+[tool.pymarkdown.plugins.md032]
+# Blank lines around lists (CONTRIBUTING.md:8).
+enabled = false

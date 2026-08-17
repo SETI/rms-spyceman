@@ -1,0 +1,141 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repo state
+
+Active work in progress. `import spyceman` now succeeds, as do the host and solar-system
+catalogs; `Recipe.furnish()` loads kernels into SPICE end to end.
+`src/spyceman/hosts/Galileo/` is an empty placeholder.
+
+See `critiques/` for the current review. Every finding there is closed and carries a dated
+status note; the "What to do next" section at the end lists the remaining work, of which
+behavioral tests for the kernel-selection logic are the most valuable.
+
+Two optimizations make catalog imports tolerable — Cassini went from 141 s to 1.3 s.
+Both are transparent, and both were verified by importing the catalogs with the
+optimization disabled and diffing every kernel's resolved metadata.
+
+- `CSPYCE.get_body_aliases()` and `get_frame_aliases()` are memoized in
+  `src/spyceman/_cspyce.py`. Every function that can change SPICE's body or frame tables is
+  wrapped there to clear the cache. **If you add a call that alters those tables without
+  going through `CSPYCE`, call `clear_alias_caches()`**, or NAIF ID resolution goes stale.
+- `_utils._fast_day_sec_from_iso()` recognizes `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM:SS.fff`
+  directly instead of invoking `julian`'s pyparsing grammar; any other shape returns
+  `None` and falls back. It **trusts the field values** rather than checking them, because
+  catalog dates are machine generated — so `validate_release_date('2019-02-29')` returns
+  `'2019-03-01'` instead of raising. Before widening the pattern, remember that nothing
+  downstream validates: `julian.day_from_ymd()` rolls `2020-02-30` into March, and that is
+  why the hyphens are required (`'12345678'` would otherwise parse as a date).
+
+## Layout and tooling
+
+The package lives at `src/spyceman/`. Tests are in `tests/`, docs in `docs/`.
+
+- Bootstrap: `./scripts/setup-venv.sh` (creates `venv/`, installs `-e ".[dev]"`)
+- All checks: `./scripts/run-all-checks.sh` (parallel by default; `-s` sequential,
+  `-c` code only, `-d` docs only, `--pytest` / `--sphinx` / … for one check)
+- Single test: `python -m pytest tests/test_utils.py -k <name>`
+- Docs: `./scripts/read-docs.sh` builds and opens the HTML
+
+Tests marked `slow` import a full kernel catalog and are **deselected by default** through
+`addopts = [..., "-m", "not slow"]`. Run them with `pytest -m slow`; they take about four
+seconds, against under three for everything else. The marker dates from when they took two
+and a half minutes; it is worth keeping only while catalog imports remain the slowest thing
+the suite does.
+
+`tests/test_docstrings.py` enforces the docstring standard in `.claude/rules/docstrings.md`
+over every function in the package, including the 90-column limit. A new function without a
+conforming docstring fails the suite.
+
+`mypy` and `stubtest` are switched off in `scripts/run-all-checks.sh` — the source
+carries no type annotations and there are no `.pyi` stubs.
+
+## Ruff is disabled
+
+Ruff is switched off in all three places it runs: `select = []` in `[tool.ruff.lint]`, the
+`ENABLE_RUFF_CHECK` default in `scripts/run-all-checks.sh`, and the commented-out step in
+`.github/workflows/run-tests.yml`. Turning it back on means restoring all three, and
+starting from `select = ["F"]`.
+
+The old `per-file-ignores` were deleted rather than left in place, because a stale
+suppression silently exempts a file long after the bug it described is gone. Re-derive them
+from a clean run if ruff is re-enabled. `flake8 --select=E12,E13` still runs and still
+gates continuation-line indentation.
+
+The disabled-rule note applies equally to the `md009`/`md012`/`md022`/`md032` PyMarkdown rules, which
+exist only because `README.md` and `CONTRIBUTING.md` have not been reformatted.
+
+`fail_under` in `[tool.coverage.report]` and the targets in `codecov.yml` are still 0. The
+suite added for critique §12.5 is structural — imports, pure helpers, and docstring
+conformance — so coverage of the kernel-selection logic remains thin. Raise the thresholds
+as behavioral tests land, not before.
+
+## Environment variables
+
+The **code** is authoritative; the README's `SPICE_PATH` / `SPICE_DOWNLOADS` are stale.
+
+- `SPICEPATH` — colon-separated local kernel directories (required)
+- `SPICE-DOWNLOADS` — destination for downloaded kernels
+- `SPICEMODULE` — force `cspyce` vs `spicepy`
+
+## Code style
+
+`.flake8` disables ~35 whitespace and formatting checks **on purpose**. Column alignment
+is the house style, not an accident — never reflow aligned code to PEP8 defaults.
+
+- Wrap at **90 columns**. E501 is off, but 90 is the de-facto limit and the banner width.
+- Align imports and assignments in columns:
+  ```python
+  from spyceman._cspyce     import CSPYCE
+  from spyceman._kernelinfo import _KernelInfo
+  NAME    = 'MARS'
+  BODY_ID = 499
+  ```
+- Single quotes; f-strings for interpolation. No type annotations anywhere — don't add them.
+- Imports may appear mid-file, right before first use (E402 is off). This is intentional.
+- Every hand-written module opens and closes with a 90-character `#` banner, and separates
+  sections with the same banner plus a title line:
+  ```python
+  ##########################################################################################
+  # spyceman/<path>.py: one-line purpose
+  ##########################################################################################
+  ```
+- Host and planet modules keep the public namespace clean by giving module-level
+  temporaries a leading underscore (`_rule`, `_lsk_source`). Some older modules instead
+  `del` them at the end of the file; both idioms are in use.
+- Docstrings follow `.claude/rules/docstrings.md`: Google style with a `Parameters:`
+  header — never `Args:` or `Inputs:` — a `Returns:` section only where the function
+  returns a value, and 90-column wrapping.
+
+## Architecture
+
+- `Kernel` is the abstract base. Subclasses: `KernelFile` (one file), `KernelSet` (mutually
+  compatible files), `KernelStack` (prioritized load order), `Metakernel` (mixed ktypes).
+  `Recipe` is the user-facing switchable collection.
+- `_KTYPES` in `src/spyceman/_ktypes.py` is ordered by load dependency
+  (`META, LSK, STAR, PCK, DSK, FK, IK, SCLK, CK, SPK`). **Do not reorder it.**
+- `Rule` (`src/spyceman/rule.py`) is a pattern mini-DSL, not plain regex: date tags like
+  `(YYYYMMDD)`, version tags like `(N+)`, plus named captures. Rules self-register keyed by
+  extension and field count; more embedded fields wins.
+- `_spicefunc()` (`src/spyceman/_spicefunc.py`) is the factory that builds every public
+  `spk()`, `pck()`, `ck()`. Their shared docstring comes from `DOCSTRING_TEMPLATE`. To add
+  a body or mission, follow `src/spyceman/solarsystem/Mars.py`: IDs → `Rule` →
+  `_spicefunc(known=..., unknown=...)`. It is internal and is not re-exported from
+  `spyceman/__init__.py`.
+- `_UPPERCASE.py` files (`_MARS_SPKS.py`, `_RECONSTRUCTED_CKS.py`, …) are **machine-generated**
+  `KTuple` tables. Regenerate with `python programs/ktupler.py`; do not hand-edit. They
+  use an 80-column banner rather than 90, and ruff is configured to skip them.
+- Importing a host or planet module executes SPICE calls at import time and may emit
+  warnings. `docs/conf.py` mocks `cspyce`, `julian`, `textkernel`, `portion`, and `spicepy`
+  for this reason.
+- `src/spyceman/recipe.py` uses custom `property` subclasses under a `# Hacks to allow some
+  convenient syntax` banner, so class-level attribute access is deliberately non-standard.
+
+## Repo etiquette
+
+- Commit directly to `main`; that matches the existing history. CONTRIBUTING.md's
+  pull-request flow applies to outside contributors.
+- GitHub Issues: label bugs `A-Bug` and enhancements `A-Enhancement`, with no other labels.
+  The issue templates in `.github/ISSUE_TEMPLATE/` apply these automatically.
+- Never file security issues publicly — email <matt@seti.org>.

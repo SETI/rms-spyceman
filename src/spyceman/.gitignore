@@ -1,0 +1,4 @@
+# Written at build time by setuptools_scm (see [tool.setuptools_scm] in pyproject.toml).
+# This lives here rather than in the root .gitignore so that the pre-existing root file
+# is left untouched.
+_version.py

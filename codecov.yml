@@ -1,0 +1,10 @@
+coverage:
+  status:
+    project:
+      default:
+        # There is no test suite yet. Raise toward rms-polymath's 90% as tests land,
+        # keeping this in step with fail_under in pyproject.toml.
+        target: 0%
+    patch:
+      default:
+        target: 0%

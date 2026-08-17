@@ -1,0 +1,42 @@
+name: Audit dependencies
+run-name: Audit dependencies triggered by ${{ github.event_name }}
+
+# This is deliberately not part of the pull request gate. scripts/run-all-checks.sh is the
+# single source of truth for the checks that gate a merge, and every one of those runs
+# offline and in seconds. Auditing reaches out to the vulnerability database, and a new
+# advisory can appear without anything in this repository changing, so it runs on a
+# schedule instead of against a diff.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: Audit rms-spyceman dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+
+      # The package itself is installed from this checkout rather than PyPI, so it has no
+      # advisories to look up and is skipped.
+      - name: Audit
+        run: |
+          pip-audit --progress-spinner off --skip-editable
