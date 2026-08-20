@@ -110,7 +110,8 @@ for _body_ids, _body_names in _JUPITER_ALIASES:
         CSPYCE.define_body_aliases(*(_body_names + _body_ids))
     except RuntimeError:
         if not _warned:
-            warnings.warn(f'Pool overflow at f{tuple(_body_names + _body_ids)}')
+            warnings.warn(f'Pool overflow at f{tuple(_body_names + _body_ids)}',
+                          stacklevel=2)
             _warned = True
 
     ALL_MOONS |= set(_body_ids)

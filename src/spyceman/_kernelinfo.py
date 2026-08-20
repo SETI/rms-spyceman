@@ -7,6 +7,7 @@ import datetime
 import numbers
 import os
 import re
+import warnings
 
 import cspyce
 import cspyce.aliases
@@ -331,8 +332,8 @@ class _KernelInfo(object):
                     # Comments are optional, so a file we cannot read the comments from
                     # is not a fatal error. Warn rather than failing silently, because a
                     # corrupt kernel usually shows up here first.
-                    warnings.warn(f'unable to read comments from {self.basename}: '
-                                  f'{type(e).__name__}: {e}')
+                    warnings.warn(f'unable to read comments from {self._basename}: '
+                                  f'{type(e).__name__}: {e}', stacklevel=2)
                     self._comments = []
 
             # For a text kernel, the comments are content with the data stripped
@@ -650,7 +651,7 @@ class _KernelInfo(object):
 
             # SCLKs require special handling
             if self.ktype == 'SCLK':
-                for key, value in self.dict_content.items():
+                for key in self.dict_content:
                     parts = key.split('SCLK_DATA_TYPE_')
                     if len(parts) == 2:
                         naif_ids.add(-int(parts[1]))

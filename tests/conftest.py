@@ -16,7 +16,6 @@ deliberately, and both are handled here:
 """
 
 import itertools
-import pathlib
 
 import pytest
 

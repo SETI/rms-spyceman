@@ -45,7 +45,7 @@
 #   Per-check toggles (true/false). Defaults favor a minimal CI set; export to
 #   enable more tools in a given repo. Each check runs only if both RUN_* and
 #   ENABLE_* are true (RUN_* from CLI or defaults below; ENABLE_* from env):
-#     ENABLE_RUFF_CHECK   (default: false; ruff is disabled for the time being)
+#     ENABLE_RUFF_CHECK   (default: true; "F" rules only, see pyproject.toml)
 #     ENABLE_RUFF_FORMAT  (default: false)
 #     ENABLE_FLAKE8_CONT  continuation-line indent, E12x/E13x (default: true)
 #     ENABLE_MYPY         (default: false)
@@ -100,8 +100,9 @@ SCOPE_SPECIFIED=false
 
 # Per-check defaults (override by exporting before invoking this script, or
 # permanently change here)
-# Ruff is disabled for the time being; see [tool.ruff.lint] in pyproject.toml.
-: "${ENABLE_RUFF_CHECK:=false}"
+# ruff check runs the "F" rules; see [tool.ruff.lint] in pyproject.toml.
+# ruff format stays off: the house style is column-aligned and would be reflowed.
+: "${ENABLE_RUFF_CHECK:=true}"
 : "${ENABLE_RUFF_FORMAT:=false}"
 : "${ENABLE_FLAKE8_CONT:=true}"
 : "${ENABLE_MYPY:=false}"

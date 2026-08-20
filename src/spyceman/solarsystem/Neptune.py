@@ -47,7 +47,7 @@ BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
 try:
     CSPYCE.define_body_aliases(814, 'HIPPOCAMP')
 except RuntimeError:
-    warnings.warn('Pool overflow at ("HIPPOCAMP", 814)')
+    warnings.warn('Pool overflow at ("HIPPOCAMP", 814)', stacklevel=2)
 
 ALL_MOONS = _srange(801, 815)
 for _body_id in ALL_MOONS:
@@ -56,7 +56,7 @@ for _body_id in ALL_MOONS:
         BODY_IDS[_body_name] = _body_id
         BODY_NAMES[_body_id] = _body_name
     else:
-        warnings.warn(f'name not identified for body {_body_id}')
+        warnings.warn(f'name not identified for body {_body_id}', stacklevel=2)
 
 # Categorize moons
 CLASSICAL   = {801, 802}                        # includes Nereid

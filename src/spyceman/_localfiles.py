@@ -54,7 +54,7 @@ def walk(*directories, translator=None, override=False, missing='warn'):
         if resolved in _ROOTS:
             continue
 
-        for root, dirs, basenames in directory.walk(follow_symlinks=True):
+        for root, _dirs, basenames in directory.walk(follow_symlinks=True):
             for basename in basenames:
                 path = root / basename
                 use_paths(path, translator=translator, override=override, ignore=True)
@@ -95,7 +95,7 @@ def _get_spicepath(missing='warn'):
     if missing == 'warn' and not _get_spicepath.warned:
         _get_spicepath.warned = True
         warnings.warn('missing environment variable "SPICEPATH"; no kernel files were '
-                      'found')
+                      'found', stacklevel=3)
 
     return []
 
@@ -166,7 +166,7 @@ def use_path(path, newname=None, override=False, ignore=False):
 
             warnings.warn(f'duplicate basename, different content:\n'
                           f'    {path}\n'
-                          f'    {old_abspath}')
+                          f'    {old_abspath}', stacklevel=2)
 
         return
 

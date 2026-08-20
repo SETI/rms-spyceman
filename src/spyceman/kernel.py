@@ -3,7 +3,6 @@
 ##########################################################################################
 """Definition of the abstract Kernel class."""
 
-import julian
 import numbers
 import numpy as np
 import re

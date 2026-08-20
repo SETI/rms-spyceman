@@ -27,13 +27,12 @@ jobs:
         run: |
           python -m pip install -e ".[dev]"
 
-      # Ruff is disabled for the time being: [tool.ruff.lint] in pyproject.toml selects
-      # no rules, so this step would pass unconditionally and only mislead. Restore it
-      # together with the rule list and with ENABLE_RUFF_CHECK in
-      # scripts/run-all-checks.sh.
-      # - name: Ruff
-      #   run: |
-      #     ruff check src tests
+      # Runs the "F" rules selected in [tool.ruff.lint] in pyproject.toml, matching
+      # `--ruff-check` in scripts/run-all-checks.sh. `ruff format` is deliberately not
+      # run: the house style is column-aligned and the formatter would reflow it.
+      - name: Ruff
+        run: |
+          ruff check src tests
 
       # Ruff implements no rule in the E121-E133 range, so continuation-line
       # indentation is the one pycodestyle family it cannot gate. This step matches

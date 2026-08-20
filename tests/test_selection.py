@@ -17,7 +17,7 @@ that something was returned.
 
 import pytest
 
-from spyceman import Kernel, KernelFile, KernelSet, KTuple
+from spyceman import KernelFile, KernelSet, KTuple
 from spyceman._spicefunc import _spicefunc
 
 

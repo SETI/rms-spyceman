@@ -129,25 +129,39 @@ quote-style = "single"
 
 [tool.ruff.lint]
 # ---------------------------------------------------------------------------------------
-# RUFF IS DISABLED FOR THE TIME BEING.
+# "F" (Pyflakes) only, for now.
 #
-# An empty `select` means no rule is enabled, so `ruff check` reports nothing and exits
-# zero. The runner in scripts/run-all-checks.sh and the CI job in
-# .github/workflows/run-tests.yml are both switched off to match; turning ruff back on
-# means restoring all three.
+# F finds undefined names and unused imports and nothing else. That is precisely the
+# failure mode the 2026-08-16 review was dominated by -- an attribute or import renamed in
+# one place and not another -- and switching it on immediately found a live one: a
+# warnings.warn() call in _kernelinfo.py whose module never imported warnings.
 #
-# To re-enable, restore a rule list here. "F" (Pyflakes) alone is the right starting
-# point: it finds undefined names and unused imports, and nothing else. The categories
-# available are E, W = pycodestyle errors/warnings; F = Pyflakes; I = isort;
-# UP = pyupgrade; B = bugbear; SIM = simplify; C4 = comprehensions; A = builtins;
-# N = pep8-naming; PT = pytest-style; RUF = Ruff-specific.
+# The wider set was measured before choosing this. Enabling E,W,I,UP,B,SIM,C4,A,N,PT,RUF
+# reports 177 more, and most of the large groups conflict with the house style rather than
+# describing defects: E402 (21) is deliberate, since imports appear mid-file right before
+# first use; N999/N801/N802 name the deliberately capitalized host and body modules and
+# the lowercase descriptor classes; I001 (24) would reorder the column-aligned import
+# blocks that .flake8 exists to preserve. Adding a category means fixing or ignoring its
+# findings first, and an ignore list must be re-derived from a clean run rather than
+# copied from the one that used to live here.
 #
-# The per-file-ignores that used to live here have been removed rather than left inert.
-# Each one named a specific defect, and a stale suppression is worse than none: it
-# silently exempts a file long after the bug it described is gone. Re-derive them from a
-# clean run when ruff is switched back on.
+# Categories available: E, W = pycodestyle; F = Pyflakes; I = isort; UP = pyupgrade;
+# B = bugbear; SIM = simplify; C4 = comprehensions; A = builtins; N = pep8-naming;
+# PT = pytest-style; RUF = Ruff-specific.
 # ---------------------------------------------------------------------------------------
-select = []
+select = ["F"]
+
+# Permanently disabled, by maintainer decision. These are not deferred work and are not to
+# be "re-derived from a clean run" like the deleted per-file-ignores: both describe the
+# house style, so they stay off whatever else `select` grows to include. Listing them here
+# rather than relying on their absence from `select` is what makes the decision durable.
+#
+#   E741  Ambiguous variable name (`l`). Already permanently ignored in .flake8, so
+#         disabling it here keeps the two linters consistent rather than having ruff
+#         object to what flake8 is configured to allow.
+#   I001  Unsorted imports. Import blocks in this package are aligned in columns and
+#         grouped by purpose, which isort would reflow. See "Code style" in CLAUDE.md.
+ignore = ["E741", "I001"]
 
 [tool.pymarkdown.plugins.md013]
 # Line length (disable so README/CONTRIBUTING can use longer lines).

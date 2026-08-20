@@ -2115,11 +2115,12 @@ work starts.
 
 ### 12.1 The linter is configured not to see the bugs
 
-> **Superseded 2026-08-16.** Ruff is now disabled outright: `select = []` in
-> `pyproject.toml`, `ENABLE_RUFF_CHECK=false` in `scripts/run-all-checks.sh`, and the CI
-> step commented out. The stale `per-file-ignores` were deleted rather than left inert.
-> The observation below still stands as the reason to re-enable it deliberately, from
-> `select = ["F"]`, rather than restoring the previous configuration.
+> **Superseded 2026-08-16, resolved 2026-08-17.** Ruff was first disabled outright, with
+> the stale `per-file-ignores` deleted rather than left inert. It is now switched back on
+> at `select = ["F"]` in all three places it runs. The prediction below held on the first
+> run: F found an undefined name, and it was one this review had introduced. See item 2
+> of "What to do next" for the detail and for why the wider rule set was measured and
+> declined. `ruff format` remains off, since the house style is column-aligned.
 
 `pyproject.toml` selects only `F`, excludes `src/spyceman/_downloads.py` entirely, and
 carries `per-file-ignores` suppressing `F821`/`F841`/`F401` in `_cspyce.py`,
@@ -2487,10 +2488,31 @@ The document is closed, but the codebase is not finished. In rough order of valu
 
    `fail_under` and the `codecov.yml` project target are raised from 0 to 30, against an
    actual 35.5%. Both are floors that catch a collapse rather than targets.
-2. **Re-enable ruff, starting from `select = ["F"]`.** §12.1 documents what it would have
-   caught: the undefined names and unused imports that made up much of this review. The
-   `per-file-ignores` were deleted rather than left inert, so they must be re-derived from a
-   clean run.
+2. ~~**Re-enable ruff, starting from `select = ["F"]`.**~~ **Done 2026-08-17.** Switched
+   on in all three places, with `select = ["F"]`. `ruff format` stays off deliberately:
+   the house style is column-aligned and the formatter would reflow it.
+
+   F found four things, and one was a live defect **introduced by the §11.4 fix in this
+   very review**: `_kernelinfo.py` calls `warnings.warn()` in the comment-reading fallback,
+   but the module never imported `warnings`, so that branch raised `NameError` instead of
+   warning. Exercising the branch afterward turned up a second fault on the same line that
+   no linter could see — it interpolated `self.basename`, and `_KernelInfo` has only
+   `_basename`. Both are fixed and `tests/test_kernelinfo.py` now covers the path with a
+   deliberately corrupt kernel. The other three findings were unused imports, two of them
+   left behind by the §12.8 change that replaced `julian.tdb_from_iso` with
+   `validate_iso_time`.
+
+   That is the argument for F in one example: a defensive branch nobody had run, a bug
+   introduced while fixing another bug, and static analysis catching it in the second it
+   was enabled.
+
+   The wider set was measured and not adopted. `E,W,I,UP,B,SIM,C4,A,N,PT,RUF` reports 177
+   further findings, and the four largest groups describe the house style rather than
+   defects: E402 (21, deliberate mid-file imports), I001 (24, which would reorder the
+   column-aligned import blocks), N999/N801/N802 (16, the capitalized host and body modules
+   and lowercase descriptor classes), RUF012 (7, the class-level registries in
+   `_KernelInfo`). Adding any category means fixing or ignoring its findings first. The
+   candidates that look like genuine smells are B904 (2), B006 (7), B028 (9) and E741 (2).
 3. **Decide the `spicepy` question** above, and either exercise or remove that path.
 4. ~~**Consider lazy NAIF ID resolution**~~ (candidate 2 in §12.6). **Withdrawn
    2026-08-17.** Profiling after §12.6 and §12.8 shows ID resolution is now 2.2% of the

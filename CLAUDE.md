@@ -58,20 +58,51 @@ returned — §6.20 was a kernel silently omitted while every call reported succ
 `mypy` and `stubtest` are switched off in `scripts/run-all-checks.sh` — the source
 carries no type annotations and there are no `.pyi` stubs.
 
-## Ruff is disabled
+## Ruff runs "F" only; the formatter never runs
 
-Ruff is switched off in all three places it runs: `select = []` in `[tool.ruff.lint]`, the
-`ENABLE_RUFF_CHECK` default in `scripts/run-all-checks.sh`, and the commented-out step in
-`.github/workflows/run-tests.yml`. Turning it back on means restoring all three, and
-starting from `select = ["F"]`.
+`ruff check` is enabled in all three places it runs: `select = ["F"]` in
+`[tool.ruff.lint]`, `ENABLE_RUFF_CHECK` in `scripts/run-all-checks.sh`, and the Ruff step
+in `.github/workflows/run-tests.yml`. Changing the rule set means changing all three
+together.
+
+**`ruff format` is deliberately off and should stay off.** The house style is
+column-aligned (see Code style below) and the formatter would reflow every aligned block.
+`ENABLE_RUFF_FORMAT` defaults to false and there is no CI step for it.
+
+`ignore = ["E741", "I001"]` is a **permanent decision, not deferred work.** Unlike the
+deleted `per-file-ignores`, these are not to be re-derived from a clean run: both describe
+the house style, so they stay off whatever `select` grows to include. E741 (a variable
+named `l`) is already ignored in `.flake8`, so this keeps the two linters consistent;
+I001 would reorder the column-aligned import blocks. Note that a rule named explicitly in
+`--select` on the command line overrides `ignore`, which is Ruff's precedence, not a bug —
+widen `select` in `pyproject.toml` if you want the ignore list respected.
+
+F is Pyflakes: undefined names and unused imports, nothing else. That is the failure mode
+this codebase actually suffers from, and enabling it immediately found a live one. Adding
+a category is a real project, not a config edit — the wider set
+(`E,W,I,UP,B,SIM,C4,A,N,PT,RUF`) still reports 137 findings beyond the two ignored above,
+most of which describe the house style rather than defects:
+
+- **E402** (21) — imports mid-file are intentional here; `.flake8` disables it too.
+- **N999/N801/N802/N805** (22) — the capitalized host and body modules (`Cassini`,
+  `Mars.py`) and the lowercase descriptor classes (`_local_dict`, `_tkdict_desc`) are
+  deliberate.
+- **RUF005** (14), **SIM108** (10) — style preferences.
+- **RUF012** (7) — the mutable class-level registries in `_KernelInfo` are the design.
+- **PT006/PT011** (13) — pytest idiom in the test suite.
+
+Worth a look if someone takes it further: **B904** (2, `raise ... from` inside `except`,
+which loses the original traceback), **B006** (7, mutable argument defaults), **B905** (9,
+`zip` without `strict`).
 
 The old `per-file-ignores` were deleted rather than left in place, because a stale
-suppression silently exempts a file long after the bug it described is gone. Re-derive them
-from a clean run if ruff is re-enabled. `flake8 --select=E12,E13` still runs and still
-gates continuation-line indentation.
+suppression silently exempts a file long after the bug it described is gone. Re-derive any
+new ones from a clean run. `flake8 --select=E12,E13` still runs and still gates
+continuation-line indentation, which Ruff implements no rule for.
 
-The disabled-rule note applies equally to the `md009`/`md012`/`md022`/`md032` PyMarkdown rules, which
-exist only because `README.md` and `CONTRIBUTING.md` have not been reformatted.
+The same "do not leave a stale suppression" note applies to the
+`md009`/`md012`/`md022`/`md032` PyMarkdown rules, which exist only because `README.md`
+and `CONTRIBUTING.md` have not been reformatted.
 
 `fail_under` in `[tool.coverage.report]` and the project target in `codecov.yml` are 30,
 against an actual 35.5%. It is a floor that catches a collapse, not a target; raise it

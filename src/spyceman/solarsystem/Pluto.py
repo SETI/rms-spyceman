@@ -51,7 +51,7 @@ for _body_id in ALL_MOONS:
         BODY_IDS[_body_name] = _body_id
         BODY_NAMES[_body_id] = _body_name
     else:
-        warnings.warn(f'name not identified for body {_body_id}')
+        warnings.warn(f'name not identified for body {_body_id}', stacklevel=2)
 
 # Categorize moons
 CLASSICAL   = {901}
