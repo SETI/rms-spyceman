@@ -50,7 +50,10 @@ Issues = "https://github.com/SETI/rms-spyceman/issues"
 
 [tool.pytest.ini_options]
 pythonpath = [
-  "src"
+  "src",
+  # programs/ is not packaged, but tests/test_ktupler.py exercises the generator that
+  # emits the machine-generated KTuple tables.
+  "programs",
 ]
 testpaths = ["tests"]
 addopts = ["-n", "auto", "--cov=src/spyceman", "--strict-markers", "--strict-config",

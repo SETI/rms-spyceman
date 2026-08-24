@@ -204,13 +204,20 @@ def new_version(path):
     """
 
     version_root = path.name[:-3] + '_v'
-    versions = list(v for v in path.parent.iterdir() if v.name.startswith(version_root))
+    versions = []
+    for sibling in path.parent.iterdir():
+        if sibling.name.startswith(version_root) and sibling.name.endswith('.py'):
+            index = sibling.name[len(version_root):-3]
+            if index.isdigit():
+                versions.append(int(index))
+
     if not versions:
         return path.parent / (version_root + '1.py')
 
-    versions.sort()
-    iversion = int(versions[-1].name[len(version_root):-3])
-    return path.parent / (version_root + str(iversion+1) + '.py')
+    # Compared as integers, not as names: "_v10.py" sorts ahead of "_v2.py" among strings,
+    # so the tenth save would otherwise be handed a number already in use and overwrite
+    # the file holding it.
+    return path.parent / (version_root + str(max(versions) + 1) + '.py')
 
 ##########################################################################################
 

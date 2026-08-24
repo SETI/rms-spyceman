@@ -8,8 +8,6 @@
 
 (3) It enables users to switch between potentially contradictory sets of SPICE kernels at will, so that users can easily compare alternative results or assess changes.
 
-Spyceman can support CSPYCE, SpicePy, or both simultaneously.
-
 For a user who simply wants to use the latest version of a set of the needed SPICE kernels, the steps required are especially simple. For example, if a user plans to work with Cassini data, this is sufficient:
 
         from spyceman import Recipe

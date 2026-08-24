@@ -388,7 +388,7 @@ run_code_checks() {
 
     if [ "$RUN_RUFF_CHECK" = true ] && [ "$ENABLE_RUFF_CHECK" = true ]; then
         print_info "Running ruff check..."
-        if python -m ruff check src tests; then
+        if python -m ruff check src tests programs; then
             print_success "Ruff check passed"
         else
             print_error "Ruff check failed"
@@ -413,7 +413,7 @@ run_code_checks() {
         # Ruff implements no rule in the E121-E133 range, so continuation-line
         # indentation is the one pycodestyle family it cannot gate. flake8 reads
         # .flake8 for the per-file exemptions.
-        if python -m flake8 --select=E12,E13 src tests; then
+        if python -m flake8 --select=E12,E13 src tests programs; then
             print_success "Flake8 continuation-line checks passed"
         else
             print_error "Flake8 continuation-line checks failed"

@@ -11,7 +11,6 @@ test_hosts_slow.py, which is opt-in.
 """
 
 import importlib
-import os
 
 import pytest
 
@@ -35,8 +34,8 @@ CORE_MODULES = [
 ]
 
 # The names that spyceman/__init__.py is expected to export
-PUBLIC_NAMES = ['CSPYCE', 'CSPYCE_ALIASES', 'CSPYCE_NAME', 'Kernel', 'KernelFile',
-                'KernelSet', 'KernelStack', 'KTuple', 'Metakernel', 'Recipe', 'Rule']
+PUBLIC_NAMES = ['CSPYCE', 'Kernel', 'KernelFile', 'KernelSet', 'KernelStack', 'KTuple',
+                'Metakernel', 'Recipe', 'Rule']
 
 
 @pytest.mark.parametrize('name', CORE_MODULES)
@@ -113,16 +112,5 @@ def test_version_is_defined():
     import spyceman
     assert isinstance(spyceman.__version__, str)
     assert spyceman.__version__
-
-
-def test_cspyce_module_is_identified():
-    """The CSPYCE indirection resolves to a real module and names itself."""
-
-    from spyceman._cspyce import CSPYCE, CSPYCE_ALIASES, CSPYCE_NAME
-
-    assert CSPYCE is not None
-    assert CSPYCE_NAME in ('cspyce', 'spicepy') or CSPYCE_NAME == os.environ.get(
-                                                                    'SPICEMODULE', '')
-    assert CSPYCE_ALIASES == (CSPYCE_NAME == 'cspyce')
 
 ##########################################################################################

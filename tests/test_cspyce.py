@@ -8,14 +8,13 @@ answer would corrupt every kernel's NAIF ID set silently, so the invalidation is
 each kind of mutation rather than assumed.
 """
 
-import os
-
 import pytest
 
+import cspyce
 import cspyce.alias_support
 
-from spyceman._cspyce import (CSPYCE, CSPYCE_ALIASES, CSPYCE_NAME, _BODY_ALIAS_CACHE,
-                              _FRAME_ALIAS_CACHE, clear_alias_caches)
+from spyceman._cspyce import (CSPYCE, _BODY_ALIAS_CACHE, _FRAME_ALIAS_CACHE, _MUTATORS,
+                              clear_alias_caches)
 
 # IDs that no SPICE kernel defines. Defining a body or frame alias changes SPICE state for
 # the rest of the process and cannot be undone, so the test that defines one uses an ID of
@@ -39,18 +38,31 @@ def clean_caches():
     clear_alias_caches()
 
 
-def test_cspyce_module_is_identified():
-    """The indirection resolves to a real module and reports its name."""
+def test_cspyce_is_the_cspyce_module():
+    """The indirection resolves to cspyce itself."""
 
-    assert CSPYCE is not None
-    assert CSPYCE_NAME in ('cspyce', 'spicepy') or CSPYCE_NAME == os.environ.get(
-                                                                    'SPICEMODULE', '')
+    assert CSPYCE is cspyce
 
 
-def test_aliases_flag_tracks_the_module_name():
-    """Alias support is claimed exactly when the module is cspyce."""
+def test_alias_support_is_available():
+    """Importing the module makes cspyce's alias functions available."""
 
-    assert CSPYCE_ALIASES == (CSPYCE_NAME == 'cspyce')
+    assert callable(CSPYCE.define_body_aliases)
+
+
+@pytest.mark.parametrize('name', _MUTATORS)
+def test_every_mutator_is_wrapped(name):
+    """Each function that can change the body or frame tables is wrapped to clear them.
+
+    An unwrapped mutator would let the caches go stale silently, so every name is checked
+    rather than only the four whose clearing is exercised below. A bare cspyce function
+    carries no __wrapped__ attribute; one of ours carries the function it replaced.
+
+    Parameters:
+        name (str): The name of one mutating function.
+    """
+
+    assert hasattr(getattr(CSPYCE, name), '__wrapped__')
 
 
 @pytest.mark.parametrize('item', [-82, 699, 601, 501, 399, 0, -31, 10016, 12345678,

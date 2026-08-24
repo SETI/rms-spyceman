@@ -70,7 +70,6 @@ autodoc_mock_imports = [
     'cspyce',
     'julian',
     'portion',
-    'spicepy',
     'textkernel',
 ]
 

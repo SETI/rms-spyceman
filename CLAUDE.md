@@ -9,8 +9,7 @@ catalogs; `Recipe.furnish()` loads kernels into SPICE end to end.
 `src/spyceman/hosts/Galileo/` is an empty placeholder.
 
 See `critiques/` for the current review. Every finding there is closed and carries a dated
-status note; the "What to do next" section at the end lists the remaining work, of which
-behavioral tests for the kernel-selection logic are the most valuable.
+status note, and the "What to do next" section at the end is now worked through as well.
 
 Two optimizations make catalog imports tolerable — Cassini went from 141 s to 1.3 s.
 Both are transparent, and both were verified by importing the catalogs with the
@@ -63,7 +62,8 @@ carries no type annotations and there are no `.pyi` stubs.
 `ruff check` is enabled in all three places it runs: `select = ["F"]` in
 `[tool.ruff.lint]`, `ENABLE_RUFF_CHECK` in `scripts/run-all-checks.sh`, and the Ruff step
 in `.github/workflows/run-tests.yml`. Changing the rule set means changing all three
-together.
+together. Both the script and CI lint `src tests programs`, and so does the flake8
+continuation-line step beside them.
 
 **`ruff format` is deliberately off and should stay off.** The house style is
 column-aligned (see Code style below) and the formatter would reflow every aligned block.
@@ -115,7 +115,6 @@ The **code** is authoritative; the README's `SPICE_PATH` / `SPICE_DOWNLOADS` are
 
 - `SPICEPATH` — colon-separated local kernel directories (required)
 - `SPICE-DOWNLOADS` — destination for downloaded kernels
-- `SPICEMODULE` — force `cspyce` vs `spicepy`
 
 ## Code style
 
@@ -148,6 +147,12 @@ is the house style, not an accident — never reflow aligned code to PEP8 defaul
 
 ## Architecture
 
+- `CSPYCE` (`src/spyceman/_cspyce.py`) **is** the `cspyce` module, monkey-patched in place
+  with the flag-returning variants of `bodn2c` and friends and with memoized alias
+  lookups. There is no `spicepy` fallback and no `SPICEMODULE` switch: the package uses
+  cspyce-only APIs (`spkcov(...).as_intervals()`, `ckcov(needav=...)`, `.flag`), so the
+  alternative never ran. Reach SPICE through `CSPYCE` rather than importing `cspyce`, so
+  that every mutator stays wrapped.
 - `Kernel` is the abstract base. Subclasses: `KernelFile` (one file), `KernelSet` (mutually
   compatible files), `KernelStack` (prioritized load order), `Metakernel` (mixed ktypes).
   `Recipe` is the user-facing switchable collection.
@@ -163,9 +168,13 @@ is the house style, not an accident — never reflow aligned code to PEP8 defaul
   `spyceman/__init__.py`.
 - `_UPPERCASE.py` files (`_MARS_SPKS.py`, `_RECONSTRUCTED_CKS.py`, …) are **machine-generated**
   `KTuple` tables. Regenerate with `python programs/ktupler.py`; do not hand-edit. They
-  use an 80-column banner rather than 90, and ruff is configured to skip them.
+  use an 80-column banner rather than 90, and ruff is configured to skip them. The
+  generator itself is not skipped: `programs/` is linted alongside `src` and `tests`, is
+  held to the docstring standard, and `tests/test_ktupler.py` covers the time formatting
+  and the version-numbering that a table depends on. `programs` is on the pytest
+  `pythonpath` so the tests can import it.
 - Importing a host or planet module executes SPICE calls at import time and may emit
-  warnings. `docs/conf.py` mocks `cspyce`, `julian`, `textkernel`, `portion`, and `spicepy`
+  warnings. `docs/conf.py` mocks `cspyce`, `julian`, `textkernel`, and `portion`
   for this reason.
 - `src/spyceman/recipe.py` uses custom `property` subclasses under a `# Hacks to allow some
   convenient syntax` banner, so class-level attribute access is deliberately non-standard.

@@ -9,7 +9,7 @@ labels: A-Bug
 - **Package version:**
 - **Python version:**
 - **OS:**
-- **SPICE module (cspyce or spicepy) and version:**
+- **cspyce version:**
 - **Relevant dependency versions:**
 
 ## Description

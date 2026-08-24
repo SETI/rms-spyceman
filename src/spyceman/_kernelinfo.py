@@ -9,17 +9,16 @@ import os
 import re
 import warnings
 
-import cspyce
-import cspyce.aliases
 import julian
 import numpy as np
 import textkernel
 
-from spyceman.rule    import Rule, _DefaultRule
-from spyceman._ktypes import _EXTENSIONS, _KTYPES
-from spyceman._utils  import (naif_ids_with_aliases, naif_ids_wo_aliases,
-                              validate_iso_time, validate_release_date,
-                              validate_version)
+from spyceman.rule     import Rule, _DefaultRule
+from spyceman._cspyce  import CSPYCE
+from spyceman._ktypes  import _EXTENSIONS, _KTYPES
+from spyceman._utils   import (naif_ids_with_aliases, naif_ids_wo_aliases,
+                               validate_iso_time, validate_release_date,
+                               validate_version)
 
 
 class _KernelInfo(object):
@@ -316,14 +315,14 @@ class _KernelInfo(object):
                     spice_type = buffer.split(b'/')[0].decode('ascii', 'replace')
                     if spice_type in ('DAF', 'DAS', 'NAIF'):
                         try:
-                            cspyce.furnsh(self.abspath)
-                            handle = cspyce.kinfo(self.abspath)[-1]
+                            CSPYCE.furnsh(self.abspath)
+                            handle = CSPYCE.kinfo(self.abspath)[-1]
                             if spice_type == 'DAF':
-                                self._comments = cspyce.dafec(handle)
+                                self._comments = CSPYCE.dafec(handle)
                             else:
-                                self._comments = cspyce.dasec(handle)
+                                self._comments = CSPYCE.dasec(handle)
                         finally:
-                            cspyce.unload(self.abspath)
+                            CSPYCE.unload(self.abspath)
 
                         if self._comments is None:
                             self._comments = []
@@ -485,12 +484,12 @@ class _KernelInfo(object):
             raise ValueError('kernel file does not exist: ' + repr(self._basename))
 
         if self.ktype == 'SPK':
-            naif_ids = {int(k) for k in cspyce.spkobj(self.abspath)}
-                # use int() because cspyce.spkobj returns values as an array of int32
+            naif_ids = {int(k) for k in CSPYCE.spkobj(self.abspath)}
+                # use int() because CSPYCE.spkobj returns values as an array of int32
 
         elif self.ktype == 'CK':
-            naif_ids = {int(k) for k in cspyce.ckobj(self.abspath)}
-                # use int() because cspyce.spkobj returns values as an array of int32
+            naif_ids = {int(k) for k in CSPYCE.ckobj(self.abspath)}
+                # use int() because CSPYCE.ckobj returns values as an array of int32
 
         elif self.ktype == 'META':
             naif_ids = set()
@@ -511,12 +510,12 @@ class _KernelInfo(object):
             tmax = -np.inf
 
             # This is based on the SPACIT code SPKGSS and SUMPCK
-            handle = cspyce.dafopr(self.abspath)            # open the file
-            cspyce.dafbfs(handle)                           # begin forward search
-            while cspyce.daffna():                          # for each array in DAF...
-                _ = cspyce.dafgn()                          # read array name
-                summary = cspyce.dafgs()                    # get summary record
-                floats, ints = cspyce.dafus(summary, 2, 5)  # unpack into floats & ints
+            handle = CSPYCE.dafopr(self.abspath)            # open the file
+            CSPYCE.dafbfs(handle)                           # begin forward search
+            while CSPYCE.daffna():                          # for each array in DAF...
+                _ = CSPYCE.dafgn()                          # read array name
+                summary = CSPYCE.dafgs()                    # get summary record
+                floats, ints = CSPYCE.dafus(summary, 2, 5)  # unpack into floats & ints
 
                 # Get the info we care about
                 tmin = min(floats[0], tmin)
@@ -526,7 +525,7 @@ class _KernelInfo(object):
                 frame = ints[1]
                 naif_ids |= {int(body), int(frame)}
 
-            cspyce.dafcls(handle)
+            CSPYCE.dafcls(handle)
 
             self._time = (tmin, tmax)   # also define the time limits
 
@@ -560,7 +559,7 @@ class _KernelInfo(object):
         self._naif_ids_as_found = ids
         self._naif_ids = naif_ids_with_aliases(ids)
         self._naif_ids_wo_aliases = naif_ids_wo_aliases(self._naif_ids)
-        self._manual_defs.append(('_naif_ids', self._naif_ids))
+        self._manual_defs.append(('naif_ids', ids))
 
     def add_naif_ids(self, *ids):
         """Add one or more NAIF IDs to this _KernelInfo object.
@@ -727,7 +726,7 @@ class _KernelInfo(object):
         # Handle SPK
         if self.ktype == 'SPK':
             for naif_id in self.naif_ids_as_found:
-                for (t0, t1) in cspyce.spkcov(self.abspath, naif_id).as_intervals():
+                for (t0, t1) in CSPYCE.spkcov(self.abspath, naif_id).as_intervals():
                     tmin = min(tmin, t0)
                     tmax = max(tmax, t1)
 
@@ -739,7 +738,7 @@ class _KernelInfo(object):
             # Note that this only works if a SCLK has been furnished!
             for naif_id in self.naif_ids_as_found:
                 try:
-                    times = cspyce.ckcov(self.abspath, naif_id, needav=False,
+                    times = CSPYCE.ckcov(self.abspath, naif_id, needav=False,
                                          level='INTERVAL', tol=0., timsys='TDB',
                                          cover=50000)   # 20000 isn't enough for Voyager!
                 except KeyError:
@@ -797,7 +796,7 @@ class _KernelInfo(object):
             tmax = validate_iso_time(tmax)
 
         self._time = (tmin, tmax)
-        self._manual_defs.append(('_time', self._time))
+        self._manual_defs.append(('time', self._time))
 
     ######################################################################################
     # Release date
@@ -911,7 +910,7 @@ class _KernelInfo(object):
         """
 
         self._release_date = validate_release_date(date)
-        self._manual_defs.append(('_release_date', self._release_date))
+        self._manual_defs.append(('release_date', self._release_date))
 
     ######################################################################################
     # Family and version
@@ -965,7 +964,7 @@ class _KernelInfo(object):
         """
 
         self._version = validate_version(value)
-        self._manual_defs.append(('_version', self._version))
+        self._manual_defs.append(('version', self._version))
 
     @property
     def family(self):
@@ -1002,7 +1001,7 @@ class _KernelInfo(object):
             value = ''
 
         self._family = str(value)
-        self._manual_defs.append(('_family', self._family))
+        self._manual_defs.append(('family', self._family))
 
     ######################################################################################
     # Download support
@@ -1223,6 +1222,13 @@ class _KernelInfo(object):
         on the old object is re-applied to it, so that user-supplied attributes survive
         the change of path.
 
+        Each definition is replayed through the property setter or method that recorded
+        it, never by writing the underlying field. One assignment can define several
+        attributes -- naif_ids defines the alias-expanded and primary-only sets as well as
+        the set it was given -- and only the setter knows how to derive them. Replaying
+        through it also records the definition again, so a second replacement still has
+        it.
+
         Parameters:
             basename (str): The basename whose kernel file is being replaced.
             abspath (str): The absolute path to the replacement file.
@@ -1233,11 +1239,11 @@ class _KernelInfo(object):
 
         new_object = _KernelInfo(basename)
         for item in manual_defs:
-            name = item[0]
-            if name in new_object.__dict__:
-                new_object.__dict__[name] = item[1]
+            attribute = _KernelInfo.__dict__[item[0]]
+            if isinstance(attribute, property):
+                attribute.fset(new_object, *item[1:])
             else:
-                _KernelInfo.__dict__[name](new_object, *item[1:])
+                attribute(new_object, *item[1:])
 
         _KernelInfo.ABSPATHS[basename] = abspath
 

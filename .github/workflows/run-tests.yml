@@ -32,14 +32,14 @@ jobs:
       # run: the house style is column-aligned and the formatter would reflow it.
       - name: Ruff
         run: |
-          ruff check src tests
+          ruff check src tests programs
 
       # Ruff implements no rule in the E121-E133 range, so continuation-line
       # indentation is the one pycodestyle family it cannot gate. This step matches
       # `--flake8-cont` in scripts/run-all-checks.sh and reads .flake8.
       - name: Flake8 continuation-line indent
         run: |
-          flake8 --select=E12,E13 src tests
+          flake8 --select=E12,E13 src tests programs
 
       - name: Pyroma
         run: |

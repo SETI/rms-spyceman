@@ -204,9 +204,12 @@ It also carries the reversed-arguments bug across unchanged (§9.1). And because
 
 > **Partly resolved 2026-08-16.** The tool was not deleted; it moved to
 > `programs/ktupler.py`. `CLAUDE.md` and the `pyproject.toml` comment now point there.
-> Still open: `programs/` is outside the packaged tree and outside every check the CI
-> runs, so the generator is now unlinted and untested, and its own banner comment still
-> reads `spyceman/ktupler.py`.
+>
+> **Closed 2026-08-23.** `programs/` is now inside the checks: ruff and the flake8
+> continuation-line step lint `src tests programs` in both `scripts/run-all-checks.sh` and
+> `.github/workflows/run-tests.yml`, `tests/test_docstrings.py` holds it to the docstring
+> standard, and `tests/test_ktupler.py` covers `format_time()` and `new_version()`. The
+> banner reads `programs/ktupler.py`. See §10.7 for what the tests found.
 
 The tool that generates the `_UPPERCASE.py` KTuple tables is gone. Still referring to it:
 
@@ -337,9 +340,8 @@ not iterable`.
 > derived attributes are populated on every path. `import spyceman` now clears
 > `set_info()` and stops at §6.6 instead.
 >
-> Still open in this section: `add_naif_ids()` and `remove_naif_ids()` continue to
-> read `self.naif_ids_as_found`, which returns `None` for an LSK or a rule-derived
-> kernel because of the misspellings in §4.1. Neither is on the import path.
+> The note that once stood here, that `add_naif_ids()` and `remove_naif_ids()` read a
+> `naif_ids_as_found` left at `None`, went away with the §4.1 fix that populates it.
 
 `src/spyceman/_kernelinfo.py:540-550`
 
@@ -2000,6 +2002,14 @@ Note that `programs/` sits outside the packaged tree and outside every check CI 
 the generator that produces 13,600 lines of data is neither linted nor tested. That was
 noted in §1.7 and this is the first concrete consequence.
 
+> **Closed 2026-08-23.** `tests/test_ktupler.py` now pins this guard from both sides: a
+> BCE date and a five-digit year are each required to come out as an unquoted TDB number
+> that reads back as the time it came from. Restoring `date[4] != '-'` fails two of them.
+> Putting the generator under the checks turned up a second defect of the same kind in
+> `new_version()`, which picked the next backup number by sorting names: `_v10.py` sorts
+> ahead of `_v2.py`, so the tenth save would have been handed a number already in use and
+> would have overwritten the file holding it. It now compares the numbers as integers.
+
 ---
 
 ## 11. Cross-cutting patterns
@@ -2453,10 +2463,8 @@ once the lower layers worked was half right: none dissolved, but several changed
 was reached fifteen call sites had established the plural spelling.
 
 Both of the out-of-sequence items are also closed. The `cassini`/`Cassini` case mismatch is
-fixed (§12.2). The `SPICEMODULE`/`spicepy` question is **still open and still a decision for
-the maintainer**: `_kernelinfo.py` imports `cspyce` directly rather than going through
-`CSPYCE`, and the fake alias functions in `_cspyce.py` have never executed. Either make the
-fallback real and test it, or delete about forty lines that cannot currently run.
+fixed (§12.2). The `SPICEMODULE`/`spicepy` question was **decided on 2026-08-23 in favor of
+deleting the fallback**, which is item 3 below.
 
 ### What to do next
 
@@ -2513,7 +2521,27 @@ The document is closed, but the codebase is not finished. In rough order of valu
    and lowercase descriptor classes), RUF012 (7, the class-level registries in
    `_KernelInfo`). Adding any category means fixing or ignoring its findings first. The
    candidates that look like genuine smells are B904 (2), B006 (7), B028 (9) and E741 (2).
-3. **Decide the `spicepy` question** above, and either exercise or remove that path.
+3. ~~**Decide the `spicepy` question**~~ **Done 2026-08-23.** The fallback is deleted
+   rather than made real. Nothing about it could have worked: the package is called
+   `spiceypy`, not `spicepy`, so the import loop could never have selected it, and
+   `_kernelinfo.py` reaches for cspyce-only APIs — `spkcov(...).as_intervals()`,
+   `ckcov(needav=...)`, `cspyce.aliases`, the `.flag` variants — that a real fallback
+   would have had to reimplement. Making it real was a project; keeping it was a promise
+   the code did not honor.
+
+   Gone: the `SPICEMODULE` environment variable, the `cspyce`/`spicepy` import loop, the
+   three `_fake_*` alias functions, and the `CSPYCE_NAME` and `CSPYCE_ALIASES` constants,
+   which could then only report `'cspyce'` and `True`. `CSPYCE` remains, and is now
+   literally the `cspyce` module monkey-patched in place, so the memoization and the
+   mutator wrapping are untouched. `_kernelinfo.py` goes through `CSPYCE` for all 18 of
+   its calls, which is the observation this item started from.
+
+   Two smaller consequences. The `hasattr()` guard on the mutator-wrapping loop was there
+   for a module that might not define `define_body_aliases`; with only cspyce it can do
+   nothing but hide a name cspyce stopped providing, which would leave that mutator
+   unwrapped and the alias caches stale in silence. It is gone, and a missing name now
+   fails at import. `tests/test_cspyce.py` gained a parametrized check that every name in
+   `_MUTATORS` really is wrapped, which is what that guard used to conceal.
 4. ~~**Consider lazy NAIF ID resolution**~~ (candidate 2 in §12.6). **Withdrawn
    2026-08-17.** Profiling after §12.6 and §12.8 shows ID resolution is now 2.2% of the
    Cassini import, so making it lazy would save about a tenth of a second. The design was
@@ -2524,6 +2552,33 @@ The document is closed, but the codebase is not finished. In rough order of valu
    `naif_ids_as_found` returns `None` after a `replace()`, and the metakernel branch of the
    `naif_ids` getter does `naif_ids |= lookup(basename).naif_ids_as_found`, which raises
    `TypeError` on `None`. Recording the as-found set instead of the expanded one fixes it.
-5. **Bring `programs/` under the checks.** §1.7 and §10.7 are the same story twice: the
-   generator that emits 13,600 lines of data is neither linted nor tested, and it has
-   already put one unparseable date into the tables.
+
+   **Fixed 2026-08-23**, though not by that one line alone: recorded under `_naif_ids`,
+   the as-found set would have left that field holding an unexpanded set and the other two
+   still `None`, because the replay writes the field rather than calling the setter that
+   derives them. Every manual definition is now recorded under the name of the property or
+   method that made it — `naif_ids`, `time`, `release_date`, `version`, `family` — and
+   `replace()` replays each through that setter. Two defects close together: the derived
+   attributes are re-derived, and the replay records the definition again, so a *second*
+   replacement no longer loses what the first one restored. It did: `_manual_defs` was
+   empty after one `replace()`, so a second discarded the assigned version too.
+   `tests/test_replace.py` covers both, and the metakernel union that raised the
+   `TypeError` is a test in its own right.
+5. ~~**Bring `programs/` under the checks.**~~ **Done 2026-08-23.** §1.7 and §10.7 were the
+   same story twice: the generator that emits 13,600 lines of data was neither linted nor
+   tested, and had already put one unparseable date into the tables.
+
+   `programs` now joins `src` and `tests` in the ruff and flake8 steps of both the check
+   script and the CI workflow — it passed both already, which is why this cost nothing
+   — and in `tests/test_docstrings.py`, which it also already satisfied. What was
+   missing was tests. `tests/test_ktupler.py` covers `format_time()`, including the §10.7
+   date guard from both ends, and `new_version()`; `programs` is on the pytest
+   `pythonpath` so the tests can import it.
+
+   Writing them found a second defect of the §10.7 kind, described there: `new_version()`
+   chose the next backup number by sorting names, so the tenth save would have overwritten
+   the ninth's successor. Both tests were validated by reintroducing the old code and
+   watching them fail — two for the date guard, two for the version numbering.
+
+   `summarize_kernels()` and `print_ktuple()` remain untested; they need a directory of
+   real kernels, which is the same obstacle the `slow` marker exists for.
