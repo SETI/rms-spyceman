@@ -175,12 +175,14 @@ is the house style, not an accident — never reflow aligned code to PEP8 defaul
   `_spicefunc(known=..., unknown=...)`. It is internal and is not re-exported from
   `spyceman/__init__.py`.
 - `_UPPERCASE.py` files (`_MARS_SPKS.py`, `_RECONSTRUCTED_CKS.py`, …) are **machine-generated**
-  `KTuple` tables. Regenerate with `python programs/ktupler.py`; do not hand-edit. They
-  use an 80-column banner rather than 90, and ruff is configured to skip them. The
-  generator itself is not skipped: `programs/` is linted alongside `src` and `tests`, is
-  held to the docstring standard, and `tests/test_ktupler.py` covers the time formatting
-  and the version-numbering that a table depends on. `programs` is on the pytest
-  `pythonpath` so the tests can import it.
+  `KTuple` tables. Regenerate with `python programs/ktupler.py`; do not hand-edit. Ruff
+  is configured to skip them. Their banner is 90 characters, like the rest of the
+  package: `_MAX_WIDTH` in the generator sets both that and the width its lines wrap to.
+  Tables written before that was so still carry an 80-character banner, and regenerating
+  one widens it. The generator itself is not skipped: `programs/` is linted alongside
+  `src` and `tests`, is held to the docstring standard, and `tests/test_ktupler.py`
+  covers the time formatting and the version-numbering that a table depends on.
+  `programs` is on the pytest `pythonpath` so the tests can import it.
 - Importing a host or planet module executes SPICE calls at import time and may emit
   warnings. `docs/conf.py` mocks `cspyce`, `julian`, `textkernel`, and `portion`
   for this reason.

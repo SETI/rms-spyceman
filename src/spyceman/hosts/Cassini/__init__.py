@@ -216,7 +216,7 @@ _ik_source = list(_ik_bases) + [f'{_url}/release.{i:02d}'
 _ik_notes = """\
     This function returns an Instrument Kernel object for one or more instruments.
 
-    The last versions of these files are: CAPS=3, CDA=1, CIRS=10, INMS=2, ISS=10, MAG=1,
+    The final versions of these files are: CAPS=3, CDA=1, CIRS=10, INMS=2, ISS=10, MAG=1,
     MIMI=11, RADAR=11, RPWS=1, RSS=3, UVIS=7, VIMS=6.
 """
 
@@ -247,11 +247,10 @@ _rule = Rule(r'cas(NNNNN)\.tsc', mission='CASSINI', source=_source_url('SCLK'),
 KernelFile.mutual_veto(_rule.pattern)
 
 _sclk_notes = """\
-
     The final Cassini clock kernel is version 172. However, it differs from all prior
-    clock kernels in that it corrects an error or nearly one second that appeared in
+    clock kernels in that it corrects an error of nearly one second that appeared in
     earlier kernels. Users who which to reconstruct work that they did prior to 2018 might
-    consider using version 171.
+    consider using version 171 instead.
 """
 
 sclk = _spicefunc('sclk',

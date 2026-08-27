@@ -41,10 +41,11 @@ julian.set_ut_model('SPICE')
 _INDENT = 4 * ' '
 _ARG_INDENT = 8 * ' '
 
-# The width the package is written to. A wrapped set of NAIF IDs is preceded by nine
-# characters -- the argument indent plus the "{" that opens the set on the first line, and
-# one space more than that indent on every line after it -- so that is what textwrap has
-# to leave room for.
+# The width the package is written to. It sets the banner width of a generated file and
+# bounds its longest line. A wrapped set of NAIF IDs is preceded by nine characters -- the
+# argument indent plus the "{" that opens the set on the first line, and one space more
+# than that indent on every line after it -- so that is what textwrap has to leave room
+# for.
 _MAX_WIDTH = 90
 _IDS_WIDTH = _MAX_WIDTH - len(_ARG_INDENT) - 1
 
@@ -204,6 +205,24 @@ def summarize_kernels(paths, pattern=None, ktype=None, out=None, known=set()):
     return basenames
 
 
+def new_file_text(path, listname):
+    """The text that surrounds the KTuples of a newly generated table.
+
+    Parameters:
+        path (str, pathlib.Path): Path of the file to be written, named in its banner.
+        listname (str): Name of the list object the file defines.
+
+    Returns:
+        (str, str): The text preceding the first KTuple and the text following the last,
+            banners included.
+    """
+
+    banner = _MAX_WIDTH * '#' + '\n'
+    before = (banner + f'# {path}\n' + banner
+              + f'\nfrom spyceman.kernelfile import KTuple\n\n{listname} = [\n')
+    return (before, ']\n\n' + banner)
+
+
 def new_version(path):
     """The given path with an unused version number appended.
 
@@ -290,10 +309,7 @@ if __name__ == '__main__':
             known = {b.basename for b in globals()[listname]}
         else:
             saved_path = ''
-            banner = 80 * '#' + '\n'
-            before = (banner + f'# {path}\n' + banner
-                      + f'\nfrom spyceman.kernelfile import KTuple\n\n{listname} = [\n')
-            after = ']\n\n' + banner
+            (before, after) = new_file_text(path, listname)
             known = set()
 
         out = path.open('w')

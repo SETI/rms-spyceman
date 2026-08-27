@@ -94,6 +94,31 @@ def test_a_five_digit_year_round_trips_through_its_number():
     assert float(ktupler.format_time(FIVE_DIGIT_YEAR_TDB)) == FIVE_DIGIT_YEAR_TDB
 
 
+def test_the_banner_matches_the_wrap_width():
+    """A generated file is bannered at the width its lines are wrapped to.
+
+    A table bannered at one width and wrapped to another reads as hand-edited, and the
+    package is written to 90 throughout.
+    """
+
+    (before, after) = ktupler.new_file_text('_TEST.py', '_TEST')
+    banners = [line for line in (before + after).split('\n') if set(line) == {'#'}]
+
+    assert len(banners) == 3
+    assert {len(b) for b in banners} == {90}
+
+
+def test_a_generated_file_opens_and_closes_its_list():
+    """The surrounding text declares the list and imports what its entries need."""
+
+    (before, after) = ktupler.new_file_text('a/b/_TEST.py', '_TEST')
+
+    assert 'from spyceman.kernelfile import KTuple' in before
+    assert before.endswith('_TEST = [\n')
+    assert after.startswith(']\n')
+    assert '# a/b/_TEST.py' in before
+
+
 def test_the_first_version_of_a_file_is_v1(tmp_path):
     """A file with no saved versions yet gets "_v1".
 
