@@ -414,16 +414,11 @@ def _spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='al
     if title and not title.endswith(' '):
         title = title + ' '
 
-    if isinstance(propnames, (list,tuple)):
-        wrapper._PROPNAMES = propnames
-    else:
-        wrapper._PROPNAMES = [propnames]
-
     # _DOCSTRING_TEMPLATE splices {NOTES} directly ahead of "Parameters:", so a non-empty
     # block supplies its own trailing blank line and an empty one contributes nothing.
     notes = notes.rstrip('\n') + '\n\n' if notes.strip() else ''
 
-    property_docs = ''.join([docstrings[k] for k in wrapper._PROPNAMES])
+    property_docs = ''.join([docstrings[k] for k in propnames])
     wrapper.__doc__ = _DOCSTRING_TEMPLATE.format(TITLE=title,
                                                  PROPERTIES=property_docs,
                                                  NOTES=notes)
@@ -446,7 +441,7 @@ def _spicefunc(funcname, title, *, known=[], unknown=None, source=None, sort='al
     wrapper._DEFAULT_TIMES_KEY = _input_list(default_times_key)
     wrapper._DEFAULT_IDS = default_ids or set()
     wrapper._DEFAULT_IDS_KEY = _input_list(default_ids_key)
-    wrapper._PROPNAMES = propnames
+    wrapper._PROPNAMES = propnames          # a list, from _input_list() above
     wrapper._DEFAULT_PROPERTIES = default_properties
 
     return wrapper
