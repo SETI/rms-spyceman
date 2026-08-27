@@ -66,6 +66,12 @@ in `.github/workflows/run-tests.yml`. Changing the rule set means changing all t
 together. Both the script and CI lint `src tests programs`, and so does the flake8
 continuation-line step beside them.
 
+The `exclude` glob in `[tool.ruff]` skips the machine-generated tables. Check what it
+actually covers with `ruff check --show-files src/spyceman` before changing it: `*` there
+is a glob wildcard, not a repeat of the character class before it, so the earlier
+`_[A-Z0-9_]*.py` also matched every `__init__.py` and left all five unlinted -- which is
+how four undefined names sat in `hosts/Cassini/__init__.py` without CI noticing.
+
 **`ruff format` is deliberately off and should stay off.** The house style is
 column-aligned (see Code style below) and the formatter would reflow every aligned block.
 `ENABLE_RUFF_FORMAT` defaults to false and there is no CI step for it.

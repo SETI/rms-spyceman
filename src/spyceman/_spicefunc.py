@@ -269,6 +269,9 @@ def _func_template(func, *, tmin=None, tmax=None, ids=None, basename=None, versi
             kernel = kernel(version=version, basename=basename, tmin=tmin, tmax=tmax,
                             ids=ids, release_date=release_date, expand=expand,
                             renew=renew, **properties)
+        if kernel is None:      # an adapter returns None when it does not apply
+            continue
+
         result.require(kernel)
 
     return result

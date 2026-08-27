@@ -5,7 +5,7 @@
 
 Attributes:
     NAME (str): "CASSINI".
-    BODY_ID (int): The body ID of Cassini, -82.
+    HOST_ID (int): The body ID of Cassini, -82.
     FRAME_IDS (dict): A mapping from frame name or (instrument, component) to frame ID.
     FRAME_NAMES (dict[int, str]): A mapping from frame ID to frame name.
     INSTRUMENT_NAMES (set): All the instrument names.
@@ -13,7 +13,7 @@ Attributes:
         frame IDs.
 
 Methods:
-    spk: Function returning a C (pointing) kernel for any part of the mission.
+    ck: Function returning a C (pointing) kernel for any part of the mission.
     fk: Function returning a frames kernel.
     ik: Function returning an instrument kernel.
     sclk: Function returning a spacecraft clock kernel.
@@ -26,16 +26,14 @@ Methods:
     irregular_satellite_spk: A SPK for Saturn's irregular satellites.
 """
 
-from spyceman.kernelfile import KernelFile
-from spyceman.metakernel import Metakernel
-from spyceman.rule       import Rule
-from spyceman._spicefunc import _spicefunc
-
-from .ck     import gapfill_ck, jupiter_ck, ck
-from .spk    import cruise_spk, small_satellite_spk, irregular_satellite_spk, spk
-from ._utils import _BODY_ID as BODY_ID, _source
+from spyceman._spicefunc  import _spicefunc
+from spyceman.kernelfile  import KernelFile
+from spyceman.metakernel  import Metakernel
+from spyceman.rule        import Rule
+from spyceman.solarsystem import Jupiter, Saturn
 
 NAME = 'CASSINI'
+HOST_ID = -82
 
 INSTRUMENT_NAMES = {'CAPS', 'CDA', 'CIRS', 'INMS', 'ISS', 'MAG', 'MIMI', 'RADAR', 'RPWS',
                     'RSS', 'UVIS', 'VIMS'}
@@ -114,21 +112,77 @@ for _key, _frame_id in FRAME_IDS.items():
     elif isinstance(_key, tuple) and _key[0] in INSTRUMENT_NAMES:
         INSTRUMENT_IDS[_key[0]].add(_frame_id)
 
+# mission_phase -> time limits
+_DEFAULT_TIMES = {
+    'VENUS'   : ('1998-04-18', '1999-06-25'),
+    'EARTH'   : ('1999-08-16', '1999-09-15'),
+    'MASURSKY': ('2000-01-23', '2000-01-24'),
+    'JUPITER' : ('1999-08-19', '2001-03-24'),
+    'SATURN'  : ('2004-01-01', '2017-09-16'),
+}
+
+# mission_phase -> set of body IDs in cruise SPKs
+# During the Jupiter flyby, the inner satellites plus Himalia, Elara, Pasiphae, Sinope,
+# Lysithea, Carme, Ananke, and Leda are always included.
+_DEFAULT_CRUISE_BODY_IDS = {
+    'VENUS'   : {HOST_ID, 2, 299},
+    'EARTH'   : {HOST_ID, 3, 301, 399},
+    'MASURSKY': {HOST_ID, 2002685},
+    'JUPITER' : {HOST_ID, 5, 599} | set(range(501, 517)),
+    'SATURN'  : {HOST_ID} | Saturn.SYSTEM
+}
+
+_DEFAULT_BODY_IDS = _DEFAULT_CRUISE_BODY_IDS.copy()
+_DEFAULT_BODY_IDS['SATURN'] = {HOST_ID} | Saturn.SYSTEM
+
+# [planet, irregulars] -> set of body IDs with or without irregulars
+_DEFAULT_BODY_IDS_W_IRREGULARS = {}
+for _planet, _ids in _DEFAULT_BODY_IDS.items():
+    _DEFAULT_BODY_IDS_W_IRREGULARS[_planet, False] = _ids
+    _DEFAULT_BODY_IDS_W_IRREGULARS[_planet, True] = _ids.copy()
+
+# Overrides...
+_DEFAULT_BODY_IDS_W_IRREGULARS['JUPITER', True] |= Jupiter.ALL_IDS
+_DEFAULT_BODY_IDS_W_IRREGULARS['SATURN', True] |= Saturn.ALL_IDS
+
+##########################################################################################
+# Utilities
+##########################################################################################
+
+def _source_url(ktype):
+    """The online directories that hold Cassini kernels of the given type.
+
+    Parameters:
+        ktype (str): Kernel type, e.g., "SPK" or "CK". Case is not significant; the value
+            is lower-cased to form the final path element of each URL.
+
+    Returns:
+        (str, str): The NAIF Cassini kernel directory and the PDS archive directory for
+            this kernel type, in that order of preference.
+    """
+
+    _SOURCE1 = 'https://naif.jpl.nasa.gov/pub/naif/CASSINI/kernels/'
+    _SOURCE2 = ('https://naif.jpl.nasa.gov/pub/naif/pds/data'
+                '/co-s_j_e_v-spice-6-v1.0/cosp_1000/data/')
+    ktype = ktype.lower()
+    return (_SOURCE1 + ktype, _SOURCE2 + ktype)
+
 ##########################################################################################
 # FKs
 ##########################################################################################
 
 from ._CASSINI_FKS import _CASSINI_FKS
 
-_rule = Rule(r'cas_v(NN)\.tf', mission='CASSINI', source=_source('FK'), dest='Cassini/FK')
+_rule = Rule(r'cas_v(NN)\.tf', mission='CASSINI', source=_source_url('FK'),
+             dest='Cassini/FK')
 KernelFile.mutual_veto(_rule.pattern)
 
-# _source() returns one URL per archive, so the release subdirectories have
+# `_source_url()` returns one URL per archive, so the release subdirectories have
 # to be built for each of them.
-_fk_bases = _source('FK')
+_fk_bases = _source_url('FK')
 _fk_source = list(_fk_bases) + [f'{_url}/release.{i:02d}'
-                                 for _url in _fk_bases
-                                 for i in range(1, 14)]
+                                for _url in _fk_bases
+                                for i in range(1, 14)]
 
 _fk_notes = """\
     The final Cassini frames kernel is version 43.
@@ -149,15 +203,15 @@ fk = _spicefunc('fk',
 from ._CASSINI_IKS import _CASSINI_IKS
 
 _rule = Rule(r'cas_(?P<instrument>[a-z]+)_v(NN)\.ti', mission='CASSINI',
-             instrument=str.upper, source=_source('IK'), dest='Cassini/IK')
+             instrument=str.upper, source=_source_url('IK'), dest='Cassini/IK')
 KernelFile.veto(r'cas_([a-z]+)_v(\d\d)\.ti', r'cas_\1_v\d\d\.ti')
 
-# _source() returns one URL per archive, so the release subdirectories have
-# to be built for each of them.
-_ik_bases = _source('IK')
+# _source_url() returns one URL per archive, so the release subdirectories have to be
+# built for each of them.
+_ik_bases = _source_url('IK')
 _ik_source = list(_ik_bases) + [f'{_url}/release.{i:02d}'
-                                 for _url in _ik_bases
-                                 for i in range(1, 14)]
+                                for _url in _ik_bases
+                                for i in range(1, 14)]
 
 _ik_notes = """\
     This function returns an Instrument Kernel object for one or more instruments.
@@ -188,7 +242,7 @@ ik = _spicefunc('ik',
 
 from ._CASSINI_SCLKS import _CASSINI_SCLKS
 
-_rule = Rule(r'cas(NNNNN)\.tsc', mission='CASSINI', source=_source('SCLK'),
+_rule = Rule(r'cas(NNNNN)\.tsc', mission='CASSINI', source=_source_url('SCLK'),
              dest='Cassini/SCLK')
 KernelFile.mutual_veto(_rule.pattern)
 
@@ -204,8 +258,8 @@ sclk = _spicefunc('sclk',
                   title = 'Cassini SCLK',
                   known = _CASSINI_SCLKS,
                   unknown = _rule.pattern,
-                  source = _source('SCLK'),
-                  exclude = True,    # never more than one
+                  source = _source_url('SCLK'),
+                  exclude = True,   # never more than one
                   notes = _sclk_notes)
 
 ##########################################################################################
@@ -248,6 +302,7 @@ def meta(planet=None, instrument=None, *, irregular=False,
                  tmin=tmin, tmax=tmax, ids=ids,
                  ck_=ck, fk_=fk, ik_=ik, sclk_=sclk, spk_=spk, **keywords)
 
+
 def _meta(*, planet, instrument, irregular, tmin, tmax, ids,
           ck_, fk_, ik_, pck_, sclk_, spk_, **keywords):
     """Assemble the Cassini metakernel from one call to each kernel function.
@@ -277,7 +332,7 @@ def _meta(*, planet, instrument, irregular, tmin, tmax, ids,
     """
 
     for dict_ in (ck_, fk_, ik_, pck_, sclk_, spk_):
-        for k,v in keywords.items():
+        for k, v in keywords.items():
             if k not in dict_:
                 dict_[k] = v
 
@@ -291,9 +346,15 @@ def _meta(*, planet, instrument, irregular, tmin, tmax, ids,
 
     return Metakernel([ck_, fk_, ik_, sclk_, spk_])
 
+##########################################################################################
+# CKs and SPKs (delayed import)
+##########################################################################################
 
-__all__ = ['cruise_spk', 'fk', 'gapfill_ck', 'ik', 'irregular_satellite_spk',
-           'jupiter_ck', 'meta', 'sclk', 'small_satellite_spk', 'spk', 'BODY_ID',
+from .ck  import gapfill_ck, jupiter_ck, ck
+from .spk import cruise_spk, small_satellite_spk, irregular_satellite_spk, spk
+
+__all__ = ['ck', 'cruise_spk', 'fk', 'gapfill_ck', 'ik', 'irregular_satellite_spk',
+           'jupiter_ck', 'meta', 'sclk', 'small_satellite_spk', 'spk', 'HOST_ID',
            'FRAME_IDS', 'FRAME_NAMES', 'INSTRUMENT_IDS', 'INSTRUMENT_NAMES', 'NAME']
 
 ##########################################################################################

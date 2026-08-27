@@ -396,6 +396,39 @@ def test_a_required_kernel_of_the_same_ktype_becomes_a_prerequisite(unique_name)
     assert spk().prerequisites == {base}
 
 
+def test_a_requirement_that_does_not_apply_is_skipped(unique_name):
+    """A requirement function returning None contributes nothing, rather than raising.
+
+    An adapter that narrows one selection function to another's inputs returns None when
+    the request excludes it, which is a documented outcome and not an error.
+
+    Parameters:
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    spk_name = unique_name('mars.bsp')
+
+    def inapplicable(**keywords):
+        """A requirement that never applies.
+
+        Parameters:
+            **keywords: The selection constraints, all ignored.
+
+        Returns:
+            None: Always, standing for a requirement outside the request.
+        """
+
+        return None
+
+    spk = _spicefunc('spk', 'Test SPK', require=(inapplicable,), known=[
+        KTuple(spk_name, '2000-01-01', '2001-01-01', {499}, '2010-01-01'),
+    ])
+    result = spk()
+
+    assert basenames_of(result) == [spk_name]
+    assert result.prerequisites == set()
+
+
 ##########################################################################################
 # Ordering
 ##########################################################################################

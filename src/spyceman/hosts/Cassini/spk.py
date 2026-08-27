@@ -3,10 +3,12 @@
 ##########################################################################################
 """Cassini SPK constructor functions:
 
-* `cruise_spk()`: SPK for the cruise to Saturn including the Jupiter flyby.
-* `small_satellite_spk()`: SPK for Saturn's small satellites.
-* `irregular__satellite_spk()`: SPK for Saturn's irregular satellites.
-* `spk()`: Function returning an SP (trajectory) kernel for any part of the mission.
+Methods:
+    cruise_spk: SPK for the cruise to Saturn including the Jupiter flyby.
+    small_satellite_spk: SPK for Saturn's small satellites.
+    irregular_satellite_spk: SPK for Saturn's irregular satellites.
+    spk: Function returning an SP (trajectory) kernel for any part of the mission,
+        optionally including the small and/or irregular satellites.
 """
 
 from spyceman.hosts._utils import _intersect_basenames
@@ -14,8 +16,8 @@ from spyceman.kernelfile   import KernelFile
 from spyceman.rule         import Rule
 from spyceman._spicefunc   import _spicefunc, _input_set
 
-from ._utils import (_DEFAULT_TIMES, _DEFAULT_BODY_IDS, _DEFAULT_BODY_IDS_W_IRREGULARS,
-                     _source)
+from . import (_DEFAULT_TIMES, _DEFAULT_CRUISE_BODY_IDS,
+               _DEFAULT_BODY_IDS_W_IRREGULARS, _source_url)
 
 ##########################################################################################
 # Cruise SPK
@@ -23,10 +25,10 @@ from ._utils import (_DEFAULT_TIMES, _DEFAULT_BODY_IDS, _DEFAULT_BODY_IDS_W_IRRE
 
 from ._CRUISE_SPKS import _CRUISE_SPKS
 
-# File names follow no pattern so all file attributes are defined manually.
-# All files are "version 1".
+# File names follow no pattern so all file attributes are defined manually. All files are
+# "version 1".
 KernelFile.set_info(_CRUISE_SPKS, version=1, family='Cassini-cruise-SPK',
-                    source=_source('SPK'), dest='Cassini/SPK-cruise',
+                    source=_source_url('SPK'), dest='Cassini/SPK-cruise',
                     mission='CASSINI')
 
 KernelFile('000331R_SK_LP0_V1P32.bsp'   , planet='VENUS')
@@ -36,13 +38,13 @@ KernelFile('010420R_SCPSE_EP1_JP83.bsp' , planet={'MASURSKY', 'JUPITER'})
 KernelFile('991130_MASURSKY.bsp'        , planet='MASURSKY')
 
 _cruise_spk_notes = """\
-    Depending on inputs, this kernel can describe any part of the Cassini trajectory from
-    launch in 1997 to Saturn approach in 2004.
+    This kernel can describe any part of the Cassini trajectory from launch in 1997 up to
+    the Saturn approach in 2004.
 
     During the Jupiter flyby, the inner satellites plus Himalia, Elara, Pasiphae, Sinope,
     Lysithea, Carme, Ananke, and Leda are included.
 
-    Version 1 is the final reconstruction.
+    Version 1 is the final/only reconstruction.
 """
 
 _cruise_spk_docstrings = {'planet': """\
@@ -57,11 +59,10 @@ cruise_spk = _spicefunc('cruise_spk',
                         exclude = False,
                         default_times = _DEFAULT_TIMES,
                         default_times_key = 'planet',
-                        default_ids = _DEFAULT_BODY_IDS,
+                        default_ids = _DEFAULT_CRUISE_BODY_IDS,
                         default_ids_key = 'planet',
                         notes = _cruise_spk_notes,
                         docstrings = _cruise_spk_docstrings)
-
 
 ##########################################################################################
 # Small satellite SPK
@@ -74,9 +75,9 @@ from ._SMALL_SATELLITE_SPKS import _SMALL_SATELLITE_SPKS
 _rule = Rule(r'(YYMMDD)[ABC]P_RE_(YYDOY)_(YYDOY)\.bsp',
              family='Cassini-small-satellite-SPK',
              naif_ids=_SMALL_SATELLITE_SPKS[-1].naif_ids,
-             source=_source('SPK'), dest='Cassini/SPK-small-satellites',
+             source=_source_url('SPK'), dest='Cassini/SPK-small-satellites',
              mission='CASSINI', planet='SATURN')
-KernelFile.mutual_veto(_rule.pattern)    # only one of these at a time
+KernelFile.mutual_veto(_rule.pattern)   # only one of these at a time
 _SMALL_SATELLITE_SPK_PATTERN = _rule.pattern
 
 _small_satellite_spk_notes = """\
@@ -88,15 +89,15 @@ _small_satellite_spk_notes = """\
 """
 
 small_satellite_spk = _spicefunc('small_satellite_spk',
-            title = 'Cassini small satellite SPKs',
-            known = _SMALL_SATELLITE_SPKS,
-            unknown = _rule.pattern,
-            source=_source('SPK'),
-            exclude=True,
-            default_times = (_SMALL_SATELLITE_SPKS[-1].start_time,
-                             _SMALL_SATELLITE_SPKS[-1].end_time),
-            default_ids = _SMALL_SATELLITE_SPKS[-1].naif_ids,
-            notes = _small_satellite_spk_notes)
+                                 title = 'Cassini small satellite SPKs',
+                                 known = _SMALL_SATELLITE_SPKS,
+                                 unknown = _rule.pattern,
+                                 source=_source_url('SPK'),
+                                 exclude=True,
+                                 default_times = (_SMALL_SATELLITE_SPKS[-1].start_time,
+                                                  _SMALL_SATELLITE_SPKS[-1].end_time),
+                                 default_ids = _SMALL_SATELLITE_SPKS[-1].naif_ids,
+                                 notes = _small_satellite_spk_notes)
 # The default sort is alphabetical, which is equivalent to chronological in this case.
 
 ##########################################################################################
@@ -110,9 +111,9 @@ from ._IRREGULAR_SATELLITE_SPKS import _IRREGULAR_SATELLITE_SPKS
 _rule = Rule(r'(YYMMDD)[ABC]P_IRRE_(YYDOY)_(YYDOY)\.bsp',
              family='Cassini-irregular-satellite-SPK',
              naif_ids=_IRREGULAR_SATELLITE_SPKS[-1].naif_ids,
-             source=_source('SPK'), dest='Cassini/SPK-irregular-satellites',
+             source=_source_url('SPK'), dest='Cassini/SPK-irregular-satellites',
              mission='CASSINI', planet='SATURN', irregular=True)
-KernelFile.mutual_veto(_rule.pattern)    # only one of these at a time
+KernelFile.mutual_veto(_rule.pattern)   # only one of these at a time
 _IRREGULAR_SATELLITE_SPK_PATTERN = _rule.pattern
 
 _irregular_satellite_spk_notes = """\
@@ -126,7 +127,7 @@ irregular_satellite_spk = _spicefunc('irregular_satellite_spk',
         title = 'Cassini irregular satellite SPKs',
         known = _IRREGULAR_SATELLITE_SPKS,
         unknown = _rule.pattern,
-        source = _source('SPK'),
+        source = _source_url('SPK'),
         exclude = True,
         default_times = (_IRREGULAR_SATELLITE_SPKS[-1].start_time,
                          _IRREGULAR_SATELLITE_SPKS[-1].end_time),
@@ -147,7 +148,7 @@ _TOUR_SPKS = _TOUR_SPKS_V1 + _TOUR_SPKS_V2 + _ALT_TOUR_SPK_V2 + _TOUR_SPKS_V3
 # This rule will assign the time limits, release date, source, mission, and planet to any
 # files matching the pattern.
 Rule(r'(YYMMDD)R[A-Z]?_SCPSE_(YYDOY)_(YYDOY)\.bsp', naif_ids=_TOUR_SPKS_V3[-1].naif_ids,
-     source=_source('SPK'), mission='CASSINI', planet='SATURN')
+     source=_source_url('SPK'), mission='CASSINI', planet='SATURN')
 
 # Assign individual versions and destinations based on the year
 _v1_rule = Rule(r'(0[4-9]|1[0-7])R[A-Z]?_SCPSE_(YYDOY)_(YYDOY)\.bsp', version=1,
@@ -157,7 +158,7 @@ _v2_rule = Rule(r'180628RU_SCPSE_(YYDOY)_(YYDOY)\.bsp', version=2,
 _v3_rule = Rule(r'200128RU_SCPSE_(YYDOY)_(YYDOY)\.bsp', version=3,
                 dest='Cassini/SPK-tour-v3')
 
-# Prepare for a future version 4
+# Prepare for a future version 4 (any date after 2020)
 _v4_rule = Rule(r'(2[1-9]|[3-9]\d)\d{4}R[A-Z]?_SCPSE_(YYDOY)_(YYDOY)\.bsp', version=4,
                 dest='Cassini/SPK-tour-v4')
 
@@ -233,15 +234,15 @@ def _cruise_spk_adapted(version=None, planet=None, basename=None, **keywords):
 def _small_satellite_spk_adapted(version=None, basename=None, **keywords):
     """Wrapper letting small_satellite_spk() accept the same inputs as spk().
 
-    The small satellite SPKs are identified by release date rather than by version
-    number, so each requested tour version is mapped to its associated date.
+    The small satellite SPKs are identified by release date rather than by version number,
+    so each requested tour version is mapped to its associated date.
 
     Parameters:
         version (int, str, tuple, set, list, optional): The tour SPK versions requested;
             None for all of them.
         basename (str, list, set, tuple, optional): Only include kernel files matching
             this basename or regular expression, or one of these.
-        **keywords: Additional constraints passed through to small_satellite_spk().
+        **keywords: Additional constraints passed through to `small_satellite_spk()`.
 
     Returns:
         Kernel, None: The small satellite SPK, or None if it does not apply to this
@@ -264,7 +265,7 @@ def _small_satellite_spk_adapted(version=None, basename=None, **keywords):
 # Adapt irregular_satellite_spk() to receive the same inputs as spk()
 def _irregular_satellite_spk_adapted(version=None, basename=None, irregular=None,
                                      **keywords):
-    """Wrapper letting irregular_satellite_spk() accept the same inputs as spk().
+    """Wrapper letting `irregular_satellite_spk()` accept the same inputs as `spk()`.
 
     Every tour SPK version maps to the same, latest irregular satellite SPK, so the
     version input is replaced by that kernel's release date.
@@ -276,7 +277,7 @@ def _irregular_satellite_spk_adapted(version=None, basename=None, irregular=None
             this basename or regular expression, or one of these.
         irregular (bool, optional): False to suppress the irregular satellite SPK
             entirely; None to leave the decision to the other constraints.
-        **keywords: Additional constraints passed through to irregular_satellite_spk().
+        **keywords: Additional constraints passed through to `irregular_satellite_spk()`.
 
     Returns:
         Kernel, None: The irregular satellite SPK, or None if it does not apply to this
@@ -333,7 +334,7 @@ spk = _spicefunc('spk',
                  title = 'Cassini mission SPKs',
                  known = _TOUR_SPKS_V1 + _TOUR_SPKS_V2 + _ALT_TOUR_SPK_V2 + _TOUR_SPKS_V3,
                  unknown = _tour_spk_pattern,
-                 source = _source('SPK'),
+                 source = _source_url('SPK'),
                  sort = _tour_spk_sort_key,
                  exclude = False,
                  reduce = True,
@@ -347,7 +348,6 @@ spk = _spicefunc('spk',
                  notes = _spk_notes,
                  docstrings = _spk_docstrings,
                  default_properties = {'planet': 'SATURN', 'irregular': False})
-
 
 __all__ = ['cruise_spk', 'irregular_satellite_spk', 'small_satellite_spk', 'spk']
 

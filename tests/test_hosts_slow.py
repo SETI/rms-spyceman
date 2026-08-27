@@ -61,4 +61,27 @@ def test_host_package_is_capitalized():
     from spyceman.hosts import Cassini
     assert Cassini is not None
 
+
+@pytest.mark.slow
+@pytest.mark.parametrize('name', ['ck', 'fk', 'ik', 'sclk', 'gapfill_ck', 'jupiter_ck',
+                                  'cruise_spk', 'small_satellite_spk',
+                                  'irregular_satellite_spk', 'spk'])
+def test_cassini_selection_functions_choose_something(name):
+    """Called with no arguments, each Cassini selection function returns kernels.
+
+    Returning None is a documented outcome, which is what makes an empty result easy to
+    miss: ck() defaulted to Cassini's body IDs while a CK carries frame IDs, so the two
+    never intersected and every CK was silently filtered out.
+
+    Parameters:
+        name (str): The name of the selection function to call.
+    """
+
+    from spyceman.hosts import Cassini
+
+    result = getattr(Cassini, name)()
+
+    assert result is not None
+    assert result.basenames
+
 ##########################################################################################

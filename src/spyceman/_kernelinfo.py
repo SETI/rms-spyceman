@@ -704,11 +704,8 @@ class _KernelInfo(object):
             self._time = (None, None)
             return self._time
 
-        # In any other case, file access is needed
-        if not self.abspath:
-            raise ValueError('kernel file does not exist: ' + repr(self._basename))
-
-        # Extract times from the basename
+        # Extract times from the basename. This needs no local copy of the file, so it
+        # comes before the check for one, as it does in naif_ids.
         time = (None, None)
         if 'time' in self._rule_values:
             time = self._rule_values['time']
@@ -718,6 +715,10 @@ class _KernelInfo(object):
         if time[0] is not None:
             self._time = time
             return self._time
+
+        # In any other case, file access is needed
+        if not self.abspath:
+            raise ValueError('kernel file does not exist: ' + repr(self._basename))
 
         # Initialize to an impossible range of times
         tmin =  np.inf

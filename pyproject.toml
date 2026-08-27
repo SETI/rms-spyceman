@@ -123,8 +123,13 @@ target-version = "py311"
 line-length = 90
 exclude = [
   # Machine-generated KTuple tables emitted by programs/ktupler.py. They are
-  # regenerated, not edited, so linting them would only produce noise.
-  "src/spyceman/**/_[A-Z0-9_]*.py",
+  # regenerated, not edited, so linting them would only produce noise. The second
+  # character must be a letter or digit rather than another underscore: "*" is a glob
+  # wildcard here, not a repeat of the class before it, so "_[A-Z0-9_]*.py" also matched
+  # every __init__.py and quietly left all six of them unlinted.
+  "src/spyceman/**/_[A-Z0-9][A-Z0-9_]*.py",
+  # Written by setuptools_scm at build time.
+  "src/spyceman/_version.py",
 ]
 
 [tool.ruff.format]

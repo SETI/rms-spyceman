@@ -12,9 +12,11 @@ library was trying to recover from something else.
 
 import warnings
 
+import julian
 import pytest
 
 from spyceman import KernelFile
+from spyceman.rule import Rule
 
 
 @pytest.fixture
@@ -71,5 +73,47 @@ def test_unreadable_comments_warn_and_name_the_file(unreadable_binary_kernel):
     message = str(caught[0].message)
     assert unreadable_binary_kernel in message
     assert 'OSError' in message
+
+
+def test_times_from_the_basename_need_no_local_file(unique_name):
+    """A kernel whose dates come from its basename reports them without being downloaded.
+
+    Most of a catalog has no local copy until something asks for one, and the rules exist
+    precisely so that a kernel can be selected on its dates beforehand. Reading the file
+    is the last resort, not the first.
+
+    The closing date is inclusive: a kernel labelled through 20010101 covers that whole
+    day, so its upper limit is the start of the next one.
+
+    Parameters:
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('20000101_20010101.bsp')
+    prefix = basename.partition('_')[0]
+    Rule(rf'{prefix}_(YYYYMMDD)_(YYYYMMDD)\.bsp', family='Test-SPK')
+
+    kernel = KernelFile(basename)
+    assert not kernel.exists
+
+    (tmin, tmax) = kernel.time
+    assert tmin == pytest.approx(julian.tdb_from_iso('2000-01-01'))
+    assert tmax == pytest.approx(julian.tdb_from_iso('2001-01-02'))
+
+
+def test_a_kernel_with_no_dates_anywhere_still_reports_its_absence(unique_name):
+    """A kernel whose times can come only from the file raises when there is no file.
+
+    The check for a local copy moved below the basename rules; it still has to fire for a
+    kernel the rules say nothing about.
+
+    Parameters:
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('undated.bsp')
+
+    with pytest.raises(ValueError, match='kernel file does not exist'):
+        KernelFile(basename).time
 
 ##########################################################################################
