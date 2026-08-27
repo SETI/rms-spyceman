@@ -22,10 +22,12 @@ Compared with the other lists in this package:
   touch.
 
 Where a file's internal date and the date in its name disagree, the release date here is
-the later of the two. That applies to 27 of these 199 files. One further case is unusual:
-cpck15Dec2017.tpc is the PDS-archived copy, whose embedded label supplies a
-PRODUCT_CREATION_TIME of 2017-12-28, so it is listed under that date rather than under the
-2017-12-15 in its name.
+the later of the two. That applies to 27 of these 199 files.
+
+cpck15Dec2017.tpc is an exception to that rule. It is the PDS-archived copy, and the
+PRODUCT_CREATION_TIME of 2017-12-28 in its embedded label is later than the date in its
+name; but that records when the archive was built, not when the kernel was issued. Its
+own CASSINI_PCK_VERSION agrees with its name, so it is listed under 2017-12-15.
 """
 
 from spyceman.kernelfile import KTuple
@@ -1224,7 +1226,7 @@ _CASSINI_PCKS = [
         {2, 3, 5, 6, 7, 10, 299, 301, 399, 501, 502, 503, 504, 506, 599, 601, 602, 603,
          604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 699,
          799},
-        '2017-12-28'),
+        '2017-12-15'),
 ]
 
 ##########################################################################################

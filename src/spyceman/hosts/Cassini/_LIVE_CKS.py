@@ -2,8 +2,6 @@
 # spyceman/hosts/cassini/_LIVE_CKS.py
 ##########################################################################################
 
-from spyceman import KTuple
-
 _LIVE_CKS = [
     '04009_04051px.bc',
     '04051_04092ph_psiv2.bc',
