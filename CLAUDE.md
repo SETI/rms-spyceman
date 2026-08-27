@@ -15,10 +15,11 @@ Two optimizations make catalog imports tolerable — Cassini went from 141 s to 
 Both are transparent, and both were verified by importing the catalogs with the
 optimization disabled and diffing every kernel's resolved metadata.
 
-- `CSPYCE.get_body_aliases()` and `get_frame_aliases()` are memoized in
+- `_CSPYCE.get_body_aliases()` and `get_frame_aliases()` are memoized in
   `src/spyceman/_cspyce.py`. Every function that can change SPICE's body or frame tables is
   wrapped there to clear the cache. **If you add a call that alters those tables without
-  going through `CSPYCE`, call `clear_alias_caches()`**, or NAIF ID resolution goes stale.
+  going through `_CSPYCE`, call `clear_alias_caches()`**, or NAIF ID resolution goes
+  stale.
 - `_utils._fast_day_sec_from_iso()` recognizes `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM:SS.fff`
   directly instead of invoking `julian`'s pyparsing grammar; any other shape returns
   `None` and falls back. It **trusts the field values** rather than checking them, because
@@ -124,7 +125,7 @@ is the house style, not an accident — never reflow aligned code to PEP8 defaul
 - Wrap at **90 columns**. E501 is off, but 90 is the de-facto limit and the banner width.
 - Align imports and assignments in columns:
   ```python
-  from spyceman._cspyce     import CSPYCE
+  from spyceman._cspyce     import _CSPYCE
   from spyceman._kernelinfo import _KernelInfo
   NAME    = 'MARS'
   BODY_ID = 499
@@ -147,12 +148,13 @@ is the house style, not an accident — never reflow aligned code to PEP8 defaul
 
 ## Architecture
 
-- `CSPYCE` (`src/spyceman/_cspyce.py`) **is** the `cspyce` module, monkey-patched in place
-  with the flag-returning variants of `bodn2c` and friends and with memoized alias
-  lookups. There is no `spicepy` fallback and no `SPICEMODULE` switch: the package uses
-  cspyce-only APIs (`spkcov(...).as_intervals()`, `ckcov(needav=...)`, `.flag`), so the
-  alternative never ran. Reach SPICE through `CSPYCE` rather than importing `cspyce`, so
-  that every mutator stays wrapped.
+- `_CSPYCE` (`src/spyceman/_cspyce.py`) **is** the `cspyce` module, monkey-patched in
+  place with the flag-returning variants of `bodn2c` and friends and with memoized alias
+  lookups. It is private: nothing re-exports it from `spyceman/__init__.py`. There is no
+  `spicepy` fallback and no `SPICEMODULE` switch: the package uses cspyce-only APIs
+  (`spkcov(...).as_intervals()`, `ckcov(needav=...)`, `.flag`), so the alternative never
+  ran. Reach SPICE through `_CSPYCE` rather than importing `cspyce`, so that every
+  mutator stays wrapped.
 - `Kernel` is the abstract base. Subclasses: `KernelFile` (one file), `KernelSet` (mutually
   compatible files), `KernelStack` (prioritized load order), `Metakernel` (mixed ktypes).
   `Recipe` is the user-facing switchable collection.

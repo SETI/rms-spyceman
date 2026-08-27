@@ -14,7 +14,7 @@ import numpy as np
 import textkernel
 
 from spyceman.rule     import Rule, _DefaultRule
-from spyceman._cspyce  import CSPYCE
+from spyceman._cspyce  import _CSPYCE
 from spyceman._ktypes  import _EXTENSIONS, _KTYPES
 from spyceman._utils   import (naif_ids_with_aliases, naif_ids_wo_aliases,
                                validate_iso_time, validate_release_date,
@@ -315,14 +315,14 @@ class _KernelInfo(object):
                     spice_type = buffer.split(b'/')[0].decode('ascii', 'replace')
                     if spice_type in ('DAF', 'DAS', 'NAIF'):
                         try:
-                            CSPYCE.furnsh(self.abspath)
-                            handle = CSPYCE.kinfo(self.abspath)[-1]
+                            _CSPYCE.furnsh(self.abspath)
+                            handle = _CSPYCE.kinfo(self.abspath)[-1]
                             if spice_type == 'DAF':
-                                self._comments = CSPYCE.dafec(handle)
+                                self._comments = _CSPYCE.dafec(handle)
                             else:
-                                self._comments = CSPYCE.dasec(handle)
+                                self._comments = _CSPYCE.dasec(handle)
                         finally:
-                            CSPYCE.unload(self.abspath)
+                            _CSPYCE.unload(self.abspath)
 
                         if self._comments is None:
                             self._comments = []
@@ -484,12 +484,12 @@ class _KernelInfo(object):
             raise ValueError('kernel file does not exist: ' + repr(self._basename))
 
         if self.ktype == 'SPK':
-            naif_ids = {int(k) for k in CSPYCE.spkobj(self.abspath)}
-                # use int() because CSPYCE.spkobj returns values as an array of int32
+            naif_ids = {int(k) for k in _CSPYCE.spkobj(self.abspath)}
+                # use int() because _CSPYCE.spkobj returns values as an array of int32
 
         elif self.ktype == 'CK':
-            naif_ids = {int(k) for k in CSPYCE.ckobj(self.abspath)}
-                # use int() because CSPYCE.ckobj returns values as an array of int32
+            naif_ids = {int(k) for k in _CSPYCE.ckobj(self.abspath)}
+                # use int() because _CSPYCE.ckobj returns values as an array of int32
 
         elif self.ktype == 'META':
             naif_ids = set()
@@ -510,12 +510,12 @@ class _KernelInfo(object):
             tmax = -np.inf
 
             # This is based on the SPACIT code SPKGSS and SUMPCK
-            handle = CSPYCE.dafopr(self.abspath)            # open the file
-            CSPYCE.dafbfs(handle)                           # begin forward search
-            while CSPYCE.daffna():                          # for each array in DAF...
-                _ = CSPYCE.dafgn()                          # read array name
-                summary = CSPYCE.dafgs()                    # get summary record
-                floats, ints = CSPYCE.dafus(summary, 2, 5)  # unpack into floats & ints
+            handle = _CSPYCE.dafopr(self.abspath)            # open the file
+            _CSPYCE.dafbfs(handle)                           # begin forward search
+            while _CSPYCE.daffna():                          # for each array in DAF...
+                _ = _CSPYCE.dafgn()                          # read array name
+                summary = _CSPYCE.dafgs()                    # get summary record
+                floats, ints = _CSPYCE.dafus(summary, 2, 5)  # unpack into floats & ints
 
                 # Get the info we care about
                 tmin = min(floats[0], tmin)
@@ -525,7 +525,7 @@ class _KernelInfo(object):
                 frame = ints[1]
                 naif_ids |= {int(body), int(frame)}
 
-            CSPYCE.dafcls(handle)
+            _CSPYCE.dafcls(handle)
 
             self._time = (tmin, tmax)   # also define the time limits
 
@@ -726,7 +726,7 @@ class _KernelInfo(object):
         # Handle SPK
         if self.ktype == 'SPK':
             for naif_id in self.naif_ids_as_found:
-                for (t0, t1) in CSPYCE.spkcov(self.abspath, naif_id).as_intervals():
+                for (t0, t1) in _CSPYCE.spkcov(self.abspath, naif_id).as_intervals():
                     tmin = min(tmin, t0)
                     tmax = max(tmax, t1)
 
@@ -738,7 +738,7 @@ class _KernelInfo(object):
             # Note that this only works if a SCLK has been furnished!
             for naif_id in self.naif_ids_as_found:
                 try:
-                    times = CSPYCE.ckcov(self.abspath, naif_id, needav=False,
+                    times = _CSPYCE.ckcov(self.abspath, naif_id, needav=False,
                                          level='INTERVAL', tol=0., timsys='TDB',
                                          cover=50000)   # 20000 isn't enough for Voyager!
                 except KeyError:
@@ -1171,7 +1171,7 @@ class _KernelInfo(object):
     ######################################################################################
 
     @staticmethod
-    def match(pattern, flags=re.I):
+    def match(pattern, flags=re.IGNORECASE):
         """The set of existing basenames that match the given regular expression.
 
         Parameters:
@@ -1195,8 +1195,7 @@ class _KernelInfo(object):
 
         This is the single entry point that keeps the three class dictionaries in step.
         ABSPATHS is written here; KERNELINFO and BASENAMES_BY_KTYPE are written by the
-        constructor that lookup() calls. Writing ABSPATHS directly, as _localfiles once
-        did, left a basename present in one dictionary and absent from another.
+        constructor that lookup() calls.
 
         Parameters:
             basename (str): The basename of a kernel file.
@@ -1206,8 +1205,7 @@ class _KernelInfo(object):
             _KernelInfo: The object associated with this basename.
 
         Raises:
-            ValueError: If the basename does not carry a recognized kernel file
-                extension.
+            ValueError: If the basename does not carry a recognized kernel file extension.
         """
 
         info = _KernelInfo.lookup(basename)

@@ -13,7 +13,7 @@ from spyceman._ktypes     import _KTYPES
 class Metakernel(Kernel):
     """Representation of a single SPICE metakernel file."""
 
-    _ktype = 'META'                 # fixed value for every instance of this subclass
+    _ktype = 'META'  # fixed value for every instance of this subclass
 
     def __init__(self, *kernels, name=''):
         """Construct a Metakernel object for one or more Kernel objects or basenames.

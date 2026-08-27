@@ -333,7 +333,7 @@ class Recipe:
         "recipe" becomes "recipe 2", "recipe 2" becomes "recipe 3", and so on.
 
         This method supports several syntax options:
-            rec.copy()          a copy of rec, which is an instance of Recipe
+            rec.copy()          a copy of `rec`, which is an instance of Recipe
             Recipe.copy(rec)    same as above
             Recipe.copy(name)   a copy of the Recipe having the given name
             Recipe.copy()       a copy of the currently selected Recipe
@@ -400,10 +400,10 @@ class Recipe:
             rootname_ = name + ' '
 
         k = 2
-        while rootname_ + str(k) in Recipe._RECIPES:
+        while (name := rootname_ + str(k)) in Recipe._RECIPES:
             k += 1
 
-        return rootname_ + str(k)
+        return name
 
     def __str__(self):
         """A brief string representation of this Recipe.
@@ -429,7 +429,7 @@ class Recipe:
         """The state of this Recipe, for pickling.
 
         Any trailing digits are stripped from the name, so that a restored Recipe is
-        numbered afresh rather than colliding with an existing one.
+        numbered afresh rather than colliding with an existing name.
 
         Returns:
             (str, list, Recipe): The Recipe's name, its kernels, and its reference

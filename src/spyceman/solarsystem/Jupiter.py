@@ -3,37 +3,36 @@
 ##########################################################################################
 """Support for Jupiter-specific kernels. Last updated 2024-02-01.
 
-The following attributes are defined:
+Attributes:
+    NAME (str): "JUPITER".
+    ALL_MOONS (set[int]): NAIF IDs for all of Jupiter's moons, including aliases.
+    GALILEANS (set[int]): NAIF IDs for the Galileo satellites.
+    CLASSICAL (set[int]): NAIF IDs of the "classical" satellites, same as GALILEANS.
+    SMALL_INNER (set[int]): NAIF IDs of the small inner moons.
+    REGULAR (set[int]): NAIF IDs of the regular satellites, CLASSICAL plus SMALL_INNER.
+    IRREGULAR (set[int]): NAIF IDs of the irregular satellites, including their aliases.
+    UNNAMED (set[int]): NAIF IDs of moons that are not yet officially named.
+    BODY_ID (int): The NAIF ID of Jupiter.
+    SYSTEM (set[int]): NAIF IDs of the planet and all inner or classical moons.
+    ALL_IDS (set[int]): NAIF IDs of the planet and all moons, including their aliases.
+    BARYCENTER (int): NAIF ID of the Jupiter system barycenter.
+    BODY_IDS (dict[str, int]): Mapping from every body name to its body ID.
+    BODY_NAMES (dict[int, str]): Mapping from every body ID to its name.
+    FRAME_ID (int): The NAIF ID of the Jupiter rotation frame.
+    FRAME_IDS (dict[str, int]): Mapping from every body name to its frame ID.
+    FRAME_CENTERS (dict[int, int]): Mapping from every frame ID to the body ID of its
+        center.
 
-* `NAME`: "JUPITER".
-* `ALL_MOONS`: The set of all IDs for Jupiter's moons, including aliases.
-* `GALILEANS`: The set of IDs of the Galileo satellites.
-* `CLASSICAL`: Same as GALILIEANS.
-* `SMALL_INNER`: The set of IDs of the small inner moons.
-* `REGULAR`: The set of IDs of the regular satellites.
-* `IRREGULAR`: The set of IDs of the Jovian irregular satellites, including their aliases.
-* `UNNAMED`: The set of IDs of moons that are not yet officially named.
-* `BODY_ID`: The NAIF ID of Jupiter.
-* `SYSTEM`: The set of IDs of the planet and all inner or classical moons.
-* `ALL_IDS`: The set of IDs of the planet and all moons, including their aliases.
-* `BARYCENTER`: The NAIF ID of the Jupiter system barycenter.
-* `BODY_IDS`: Dictionary that maps every body name to its body ID.
-* `BODY_NAMES`: Dictionary that maps every body ID to its name.
-* `FRAME_ID`: The NAIF ID of the Jupiter rotation frame.
-* `FRAME_IDS`: Dictionary that maps every body name to its frame ID.
-* `FRAME_CENTERS`: Dictionary that maps every frame ID to the body ID of its center.
-
-The following functions are defined:
-
-* `spk()`: Function returning a Kernel object derived from one or more Jupiter SPK files.
+Methods:
+    spk(): Function returning a Kernel object derived from one or more Jupiter SPK files.
 """
 
 import warnings
 
-from spyceman.rule        import Rule
-from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
-from spyceman._cspyce     import CSPYCE
+from spyceman._cspyce     import _CSPYCE
 from spyceman._spicefunc  import _spicefunc
+from spyceman.rule        import Rule as _Rule
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE_URL
 
 ##########################################################################################
 # Managed list of known Jovian moons and their SPICE IDs
@@ -98,7 +97,7 @@ BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
 
 ALL_MOONS = _srange(501, 573)
 for _body_id in ALL_MOONS:
-    _body_name, _found = CSPYCE.bodc2n(_body_id)
+    _body_name, _found = _CSPYCE.bodc2n(_body_id)
     if _found:
         BODY_IDS[_body_name] = _body_id
         BODY_NAMES[_body_id] = _body_name
@@ -107,7 +106,7 @@ for _body_id in ALL_MOONS:
 _warned = False
 for _body_ids, _body_names in _JUPITER_ALIASES:
     try:
-        CSPYCE.define_body_aliases(*(_body_names + _body_ids))
+        _CSPYCE.define_body_aliases(*(_body_names + _body_ids))
     except RuntimeError:
         if not _warned:
             warnings.warn(f'Pool overflow at f{tuple(_body_names + _body_ids)}',
@@ -126,11 +125,13 @@ GALILEANS = CLASSICAL
 SMALL_INNER = {505} | _srange(514, 518)
 REGULAR = CLASSICAL | SMALL_INNER
 
+# Every moon that is not regular is irregular. This is derived by subtraction rather than
+# from the alias table, which would omit any moon that has no alias -- the Himalia group
+# among them.
+IRREGULAR = ALL_MOONS - REGULAR
+
 UNNAMED = set()
-IRREGULAR = set()
 for (_body_ids, _body_names) in _JUPITER_ALIASES:
-    if not set(_body_ids) & REGULAR:
-        IRREGULAR |= set(_body_ids)
     if '_' in _body_names[0]:
         UNNAMED |= set(_body_ids)
 
@@ -141,11 +142,11 @@ ALL_IDS = {BODY_ID} | ALL_MOONS
 # Frames
 ##########################################################################################
 
-FRAME_ID, _frame_name, _found = CSPYCE.cidfrm(NAME)
+FRAME_ID, _frame_name, _found = _CSPYCE.cidfrm(NAME)
 FRAME_IDS = {NAME: FRAME_ID}
 FRAME_CENTERS = {FRAME_ID: BODY_ID}
 for _body_name, _body_id in BODY_IDS.items():
-    _frame_id, _frame_name, _found = CSPYCE.cidfrm(_body_id)
+    _frame_id, _frame_name, _found = _CSPYCE.cidfrm(_body_id)
     if not _found:
         _frame_id = _body_id    # if not already defined, use the body ID as the frame ID
 
@@ -158,18 +159,18 @@ for _body_name, _body_id in BODY_IDS.items():
 
 from ._JUPITER_SPKS import _JUPITER_SPKS
 
-_spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
+_spk_source = (_SOURCE_URL + 'spk/satellites',
+               _SOURCE_URL + 'spk/satellites/a_old_versions')
 
-_rule = Rule(r'jup(NNN).*\.bsp', source=_spk_source, dest='Jupiter/SPK', planet=NAME,
-             family='Jupiter-SPK')
+_rule = _Rule(r'jup(NNN).*\.bsp', source=_spk_source, dest='Jupiter/SPK', planet=NAME,
+              family='Jupiter-SPK')
 
 _default_body_ids = {False: SYSTEM, True: ALL_IDS}
 
 _spk_docstrings = {'irregular': """\
-        irregular (bool, optional): True to include Jupiter's irregular satellites in
-            the returned Kernel object. Otherwise, unless a list of NAIF IDs is
-            explicitly provided, the returned Kernel covers only Jupiter's inner
-            satellites.
+        irregular (bool, optional): True to include Jupiter's irregular satellites in the
+            returned Kernel object. Otherwise, unless a list of NAIF IDs is explicitly
+            provided, the returned Kernel covers only Jupiter's inner satellites.
 """}
 
 spk = _spicefunc('spk',
@@ -181,7 +182,7 @@ spk = _spicefunc('spk',
                  exclude = False,
                  reduce = True,
                  default_ids = _default_body_ids,
-                 default_ids_key = ('irregular',),
+                 default_ids_key = 'irregular',
                  default_properties = {'irregular': False},
                  docstrings = _spk_docstrings)
 

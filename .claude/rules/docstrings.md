@@ -62,10 +62,10 @@ function itself raises, not everything that could propagate from its callees.
   is genuinely unclear, work it out from the code and write it down; do not leave a marker.
 - Stray `#xxx` comments below a docstring (`#xxx Insert "*"?`, `#xxx Unknown arg name:`).
   Resolve whatever they refer to and delete them.
-- Section headers other than `Parameters:`, `Returns:`, `Raises:`, and — for classes only —
+- Section headers other than `Parameters:`, `Returns:`, `Raises:`, and — for classes and files only —
   `Attributes:` and `Methods:`.
 
 ## Class docstrings
 
-Classes follow the same conventions, using `Attributes:` and `Methods:` where useful. The
+Classes and files follow the same conventions, using `Attributes:` and `Methods:` where useful. The
 constructor's parameters are documented on `__init__`, not on the class.

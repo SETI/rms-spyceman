@@ -2,11 +2,8 @@
 # spyceman/solarsystem/__init__.py
 ##########################################################################################
 
-__all__ = []
+_SOURCE_URL = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/'
 
-_SOURCE = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/'
-
-from spyceman.rule import Rule
 
 def _spk_sort_key(basename):
     """Sort key placing files like "satNNN.bsp" after those with a suffix following NNN.
@@ -22,6 +19,7 @@ def _spk_sort_key(basename):
     """
     return basename.replace('.', '~') if len(basename) <= 10 else basename
 
+
 def _srange(*args):
     """Convenience function equivalent to set(range(*args)).
 
@@ -33,5 +31,8 @@ def _srange(*args):
         set[int]: The integers produced by range() over the given arguments.
     """
     return set(range(*args))
+
+
+__all__ = []
 
 ##########################################################################################

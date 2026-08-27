@@ -1,5 +1,5 @@
 ##########################################################################################
-# tests/test_cspyce.py: Tests of the CSPYCE indirection and its memoized alias lookups
+# tests/test_cspyce.py: Tests of the _CSPYCE indirection and its memoized alias lookups
 ##########################################################################################
 """Tests of spyceman._cspyce.
 
@@ -13,7 +13,7 @@ import pytest
 import cspyce
 import cspyce.alias_support
 
-from spyceman._cspyce import (CSPYCE, _BODY_ALIAS_CACHE, _FRAME_ALIAS_CACHE, _MUTATORS,
+from spyceman._cspyce import (_CSPYCE, _BODY_ALIAS_CACHE, _FRAME_ALIAS_CACHE, _MUTATORS,
                               clear_alias_caches)
 
 # IDs that no SPICE kernel defines. Defining a body or frame alias changes SPICE state for
@@ -41,13 +41,13 @@ def clean_caches():
 def test_cspyce_is_the_cspyce_module():
     """The indirection resolves to cspyce itself."""
 
-    assert CSPYCE is cspyce
+    assert _CSPYCE is cspyce
 
 
 def test_alias_support_is_available():
     """Importing the module makes cspyce's alias functions available."""
 
-    assert callable(CSPYCE.define_body_aliases)
+    assert callable(_CSPYCE.define_body_aliases)
 
 
 @pytest.mark.parametrize('name', _MUTATORS)
@@ -62,7 +62,7 @@ def test_every_mutator_is_wrapped(name):
         name (str): The name of one mutating function.
     """
 
-    assert hasattr(getattr(CSPYCE, name), '__wrapped__')
+    assert hasattr(getattr(_CSPYCE, name), '__wrapped__')
 
 
 @pytest.mark.parametrize('item', [-82, 699, 601, 501, 399, 0, -31, 10016, 12345678,
@@ -75,8 +75,8 @@ def test_memoized_lookups_match_the_unwrapped_originals(item, clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    assert CSPYCE.get_body_aliases(item) == cspyce.alias_support.get_body_aliases(item)
-    assert CSPYCE.get_frame_aliases(item) == cspyce.alias_support.get_frame_aliases(item)
+    assert _CSPYCE.get_body_aliases(item) == cspyce.alias_support.get_body_aliases(item)
+    assert _CSPYCE.get_frame_aliases(item) == cspyce.alias_support.get_frame_aliases(item)
 
 
 def test_repeated_lookups_are_cached(clean_caches):
@@ -87,9 +87,9 @@ def test_repeated_lookups_are_cached(clean_caches):
     """
 
     assert 699 not in _FRAME_ALIAS_CACHE
-    first = CSPYCE.get_frame_aliases(699)
+    first = _CSPYCE.get_frame_aliases(699)
     assert 699 in _FRAME_ALIAS_CACHE
-    assert CSPYCE.get_frame_aliases(699) == first
+    assert _CSPYCE.get_frame_aliases(699) == first
 
 
 def test_a_missing_item_is_cached_too(clean_caches):
@@ -99,7 +99,7 @@ def test_a_missing_item_is_cached_too(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    assert CSPYCE.get_body_aliases(UNDEFINED_ID) == ([], [])
+    assert _CSPYCE.get_body_aliases(UNDEFINED_ID) == ([], [])
     assert UNDEFINED_ID in _BODY_ALIAS_CACHE
 
 
@@ -110,12 +110,12 @@ def test_the_caller_cannot_modify_what_the_cache_holds(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    first = CSPYCE.get_frame_aliases(699)
+    first = _CSPYCE.get_frame_aliases(699)
     assert first[0] == [10016]
     first[0].append(999999)
     first[1].append('BOGUS')
 
-    second = CSPYCE.get_frame_aliases(699)
+    second = _CSPYCE.get_frame_aliases(699)
     assert second[0] == [10016]
     assert 'BOGUS' not in second[1]
 
@@ -127,7 +127,7 @@ def test_returned_values_are_lists(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    (ids, names) = CSPYCE.get_frame_aliases(699)
+    (ids, names) = _CSPYCE.get_frame_aliases(699)
     assert isinstance(ids, list)
     assert isinstance(names, list)
 
@@ -142,12 +142,12 @@ def test_define_body_aliases_invalidates_a_cached_miss(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    assert CSPYCE.get_body_aliases(DEFINABLE_BODY_ID) == ([], [])
+    assert _CSPYCE.get_body_aliases(DEFINABLE_BODY_ID) == ([], [])
 
-    CSPYCE.define_body_aliases(DEFINABLE_BODY_ID, 'SPYCEMAN_TEST_BODY')
+    _CSPYCE.define_body_aliases(DEFINABLE_BODY_ID, 'SPYCEMAN_TEST_BODY')
 
     assert not _BODY_ALIAS_CACHE
-    assert CSPYCE.get_body_aliases(DEFINABLE_BODY_ID)[0] == [DEFINABLE_BODY_ID]
+    assert _CSPYCE.get_body_aliases(DEFINABLE_BODY_ID)[0] == [DEFINABLE_BODY_ID]
 
 
 def test_define_frame_aliases_clears_the_caches(clean_caches):
@@ -160,10 +160,10 @@ def test_define_frame_aliases_clears_the_caches(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    CSPYCE.get_frame_aliases(699)
+    _CSPYCE.get_frame_aliases(699)
     assert _FRAME_ALIAS_CACHE
 
-    CSPYCE.define_frame_aliases('SPYCEMAN_TEST_FRAME', *DEFINABLE_FRAME_IDS)
+    _CSPYCE.define_frame_aliases('SPYCEMAN_TEST_FRAME', *DEFINABLE_FRAME_IDS)
 
     assert not _FRAME_ALIAS_CACHE
 
@@ -179,14 +179,14 @@ def test_furnsh_clears_the_caches(tmp_path, clean_caches):
     path = tmp_path / 'test_naif.tls'
     path.write_text('\\begindata\nDELTET/DELTA_T_A = 32.184\n\\begintext\n')
 
-    CSPYCE.get_body_aliases(699)
+    _CSPYCE.get_body_aliases(699)
     assert _BODY_ALIAS_CACHE
 
-    CSPYCE.furnsh(str(path))
+    _CSPYCE.furnsh(str(path))
     try:
         assert not _BODY_ALIAS_CACHE
     finally:
-        CSPYCE.unload(str(path))
+        _CSPYCE.unload(str(path))
 
 
 def test_unload_clears_the_caches(tmp_path, clean_caches):
@@ -200,11 +200,11 @@ def test_unload_clears_the_caches(tmp_path, clean_caches):
     path = tmp_path / 'test_naif.tls'
     path.write_text('\\begindata\nDELTET/DELTA_T_A = 32.184\n\\begintext\n')
 
-    CSPYCE.furnsh(str(path))
-    CSPYCE.get_body_aliases(699)
+    _CSPYCE.furnsh(str(path))
+    _CSPYCE.get_body_aliases(699)
     assert _BODY_ALIAS_CACHE
 
-    CSPYCE.unload(str(path))
+    _CSPYCE.unload(str(path))
 
     assert not _BODY_ALIAS_CACHE
 
@@ -216,11 +216,11 @@ def test_a_failed_mutator_still_clears_the_caches(clean_caches):
         clean_caches (None): Fixture that empties the caches around the test.
     """
 
-    CSPYCE.get_body_aliases(699)
+    _CSPYCE.get_body_aliases(699)
     assert _BODY_ALIAS_CACHE
 
     with pytest.raises(Exception):
-        CSPYCE.furnsh('/no/such/directory/no_such_kernel.tls')
+        _CSPYCE.furnsh('/no/such/directory/no_such_kernel.tls')
 
     assert not _BODY_ALIAS_CACHE
 
@@ -228,8 +228,8 @@ def test_a_failed_mutator_still_clears_the_caches(clean_caches):
 def test_clear_alias_caches_empties_both():
     """clear_alias_caches() drops every memoized entry from both caches."""
 
-    CSPYCE.get_body_aliases(699)
-    CSPYCE.get_frame_aliases(699)
+    _CSPYCE.get_body_aliases(699)
+    _CSPYCE.get_frame_aliases(699)
 
     clear_alias_caches()
 
@@ -240,8 +240,8 @@ def test_clear_alias_caches_empties_both():
 def test_wrapped_functions_keep_their_identity():
     """The wrappers report the names of the functions they stand in for."""
 
-    assert CSPYCE.get_body_aliases.__name__ == 'get_body_aliases'
-    assert CSPYCE.get_frame_aliases.__name__ == 'get_frame_aliases'
-    assert CSPYCE.furnsh.__name__ == 'furnsh'
+    assert _CSPYCE.get_body_aliases.__name__ == 'get_body_aliases'
+    assert _CSPYCE.get_frame_aliases.__name__ == 'get_frame_aliases'
+    assert _CSPYCE.furnsh.__name__ == 'furnsh'
 
 ##########################################################################################

@@ -5,15 +5,14 @@
 from spyceman import KTuple
 
 _CASSINI_SCLKS = [
-
-KTuple('cas00171.tsc',
-    None, None,
-    {-82},
-    '2017-05-30'),
-KTuple('cas00172.tsc',
-    None, None,
-    {-82},
-    '2018-02-15'),
+    KTuple('cas00171.tsc',
+        None, None,
+        {-82},
+        '2017-05-30'),
+    KTuple('cas00172.tsc',
+        None, None,
+        {-82},
+        '2018-02-15'),
 ]
 
 ##########################################################################################

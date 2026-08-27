@@ -7,7 +7,7 @@ import numbers
 import numpy as np
 import re
 
-from spyceman._cspyce     import CSPYCE
+from spyceman._cspyce     import _CSPYCE
 from spyceman._kernelinfo import _KernelInfo
 from spyceman._ktypes     import _KTYPES
 from spyceman._utils      import (is_basename, basename_ktype, validate_iso_time,
@@ -677,7 +677,25 @@ class Kernel(object):
     # Furnished kernel management
     ######################################################################################
 
-    def furnish(self, tmin=None, tmax=None, ids=None, *, minloc=0, refloc=None,
+    def furnish(self, tmin=None, tmax=None, ids=None):
+        """Furnish this Kernel object at highest precedence for the specified range of
+        times and the specified set of NAIF IDs.
+
+        Overlapping, excluded kernels are unloaded. Pre-, post-, and co-requisites are
+        furnished as needed, prerequisites below this kernel and post-requisites above.
+
+        Parameters:
+            tmin (float, str, optional): Lower time limit in seconds TDB or as a
+                date-time string; None for all times.
+            tmax (float, str, optional): Upper time limit in seconds TDB or as a
+                date-time string; None for all times.
+            ids (int, set[int], optional): A NAIF ID or set of NAIF IDs; None to ignore
+                NAIF IDs.
+        """
+
+        self._furnish(tmin=tmin, tmax=tmax, ids=ids)
+
+    def _furnish(self, tmin=None, tmax=None, ids=None, *, minloc=0, refloc=None,
                 reason=''):
         """Furnish this Kernel object at highest precedence for the specified range of
         times and the specified set of NAIF IDs.
@@ -707,14 +725,14 @@ class Kernel(object):
         # Unload any excluded kernels; track minloc
         for kernel in self.exclusions:
             kernel = Kernel.as_kernel(kernel)
-            minloc = kernel.unload(tmin=tmin, tmax=tmax, ids=ids, refloc=minloc,
-                                   reason='exclusion')
+            minloc = kernel._unload(tmin=tmin, tmax=tmax, ids=ids, refloc=minloc,
+                                    reason='exclusion')
 
         # Furnish any prerequisites; identify highest loc among the furnished basenames
         for kernel in self.prerequisites:
             kernel = Kernel.as_kernel(kernel)
-            loc, minloc = kernel.furnish(tmin=tmin, tmax=tmax, ids=ids,
-                                         minloc=0, refloc=minloc, reason='prerequisite')
+            loc, minloc = kernel._furnish(tmin=tmin, tmax=tmax, ids=ids,
+                                          minloc=0, refloc=minloc, reason='prerequisite')
             minloc = max(minloc, loc)
 
         # Furnish this kernel above any prerequisites
@@ -724,13 +742,13 @@ class Kernel(object):
         # Furnish any post-requisites above this kernel
         for kernel in self.postrequisites:
             kernel = Kernel.as_kernel(kernel)
-            _, maxloc = kernel.furnish(tmin=tmin, tmax=tmax, ids=ids,  minloc=maxloc,
-                                       refloc=maxloc, reason='post-requisite')
+            _, maxloc = kernel._furnish(tmin=tmin, tmax=tmax, ids=ids,  minloc=maxloc,
+                                        refloc=maxloc, reason='post-requisite')
 
         # Furnish any co-requisites
         for kernel in self.corequisites:
             kernel = Kernel.as_kernel(kernel)
-            kernel.furnish(tmin=tmin, tmax=tmax, ids=ids, reason='corequisite')
+            kernel._furnish(tmin=tmin, tmax=tmax, ids=ids, reason='corequisite')
 
         # Mirror _furnish_for(): a caller that supplied a refloc gets it back, updated.
         if refloc is None:
@@ -797,7 +815,7 @@ class Kernel(object):
 
                 furnished.pop(loc)
                 if not Kernel._DEBUG:
-                    CSPYCE.unload(unload.abspath)
+                    _CSPYCE.unload(unload.abspath)
                 if Kernel._VERBOSE:
                     print('Spyceman:', unload.basename, 'unloaded (veto)')
 
@@ -818,7 +836,7 @@ class Kernel(object):
                 loc = len(furnished) - 1
 
                 if not Kernel._DEBUG:
-                    CSPYCE.furnsh(kfile.abspath)
+                    _CSPYCE.furnsh(kfile.abspath)
                 if Kernel._VERBOSE:
                     reason = reason or 'request'
                     print('Spyceman:', kfile.basename, f'furnished ({reason})')
@@ -834,8 +852,8 @@ class Kernel(object):
                 # If this file's precedence is too low, unload and furnish again
                 if loc < max(locs):
                     if not Kernel._DEBUG:
-                        CSPYCE.unload(kfile.abspath)
-                        CSPYCE.furnsh(kfile.abspath)
+                        _CSPYCE.unload(kfile.abspath)
+                        _CSPYCE.furnsh(kfile.abspath)
                     if Kernel._VERBOSE:
                         reason = reason or 'request'
                         print('Spyceman:', kfile.basename, f'reloaded ({reason})')
@@ -857,7 +875,21 @@ class Kernel(object):
 
         return (maxloc, refloc)
 
-    def unload(self, tmin=None, tmax=None, ids=None, refloc=0, reason=''):
+    def unload(self, tmin=None, tmax=None, ids=None):
+        """Unload any basename of this kernel that overlaps the time range or NAIF IDs.
+
+        Parameters:
+            tmin (float, str, optional): Lower time limit in seconds TDB or as a
+                date-time string; None for all times.
+            tmax (float, str, optional): Upper time limit in seconds TDB or as a
+                date-time string; None for all times.
+            ids (int, set[int], optional): A NAIF ID or set of NAIF IDs; None to ignore
+                NAIF IDs.
+        """
+
+        self._unload(tmin=tmin, tmax=tmax, ids=ids)
+
+    def _unload(self, tmin=None, tmax=None, ids=None, refloc=0, reason=''):
         """Unload any basename of this kernel that overlaps the time range or NAIF IDs.
 
         Parameters:
@@ -891,7 +923,7 @@ class Kernel(object):
                     continue
 
                 if not Kernel._DEBUG:
-                    CSPYCE.unload(kfile.abspath)
+                    _CSPYCE.unload(kfile.abspath)
                 if Kernel._VERBOSE:
                     reason = reason or 'request'
                     print('Spyceman:', kfile.basename, f'unloaded ({reason})')

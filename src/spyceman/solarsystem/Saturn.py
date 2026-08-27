@@ -3,39 +3,39 @@
 ##########################################################################################
 """Support for Saturn-specific kernels. Last updated 2024-02-01.
 
-The following attributes are defined:
+Attributes:
+    NAME (str): "SATURN".
+    ALL_MOONS (set[int]): NAIF IDs for all of Saturn's moons, including aliases.
+    CLASSICAL (set[int]): NAIF IDs of the "classical" satellites, Mimas to Phoebe.
+    SMALL_INNER (set[int]): NAIF IDs of the small inner moons.
+    REGULAR (set[int]): NAIF IDs of the regular satellites, excluding Phoebe.
+    IRREGULAR (set[int]): NAIF IDs of the irregular satellites, including Phoebe, plus all
+        aliases.
+    UNNAMED (set[int]): NAIF IDs of moons that are not yet officially named.
+    BODY_ID (int): The NAIF ID of Saturn.
+    SYSTEM (set[int]): NAIF IDs of the planet and all inner or classical moons.
+    ALL_IDS (set[int]): NAIF IDs of the planet and all moons, including their aliases.
+    BARYCENTER (int): NAIF ID of the Saturn system barycenter.
+    BODY_IDS (dict[str, int]): Mapping from every body name to its body ID.
+    BODY_NAMES (dict[int, str]): Mapping from every body ID to its name.
+    FRAME_ID (int): The NAIF ID of the Saturn rotation frame.
+    FRAME_IDS (dict[str, int]): Mapping from every body name to its frame ID.
+    FRAME_CENTERS (dict[int, int]): Mapping from every frame ID to the body ID of its
+        center.
 
-* `NAME`: "SATURN".
-* `ALL_MOONS`: The set of all IDs for SATURN's moons, including aliases.
-* `CLASSICAL`: The set with the "classical" satellites, Mimas to Phoebe.
-* `SMALL_INNER`: The set of IDs of the small inner moons.
-* `REGULAR`: The set of IDs of the regular satellites.
-* `IRREGULAR`: The set of IDs of Saturn's irregular satellites, including their aliases.
-* `UNNAMED`: The set of IDs of moons that are not yet officially named.
-* `BODY_ID`: The NAIF ID of Saturn.
-* `SYSTEM`: The set of IDs of the planet and all inner or classical moons.
-* `ALL_IDS`: The set of IDs of the planet and all moons, including their aliases.
-* `BARYCENTER`: The NAIF ID of the Saturn system barycenter.
-* `BODY_IDS`: Dictionary that maps every body name to its body ID.
-* `BODY_NAMES`: Dictionary that maps every body ID to its name.
-* `FRAME_ID`: The NAIF ID of the Saturn rotation frame.
-* `FRAME_IDS`: Dictionary that maps every body name to its frame ID.
-* `FRAME_CENTERS`: Dictionary that maps every frame ID to the body ID of its center.
-
-The following functions are defined:
-
-* `pck()`: Function returning a Kernel object derived from one or more Saturn-specific PCK
-  files.
-* `spk()`: Function returning a Kernel object derived from one or more Saturn SPK files.
+Methods:
+    pck(): Function returning a Kernel object derived from one or more Saturn-specific PCK
+        files.
+    spk(): Function returning a Kernel object derived from one or more Saturn SPK files.
 """
 
 import warnings
 
-from spyceman.kernelfile  import KernelFile
-from spyceman.rule        import Rule
-from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE
-from spyceman._cspyce     import CSPYCE
-from spyceman._spicefunc   import _spicefunc
+from spyceman._cspyce     import _CSPYCE
+from spyceman._spicefunc  import _spicefunc
+from spyceman.kernelfile  import KernelFile as _KernelFile
+from spyceman.rule        import Rule as _Rule
+from spyceman.solarsystem import _spk_sort_key, _srange, _SOURCE_URL
 
 ##########################################################################################
 # Managed list of known Saturnian moons and their SPICE IDs
@@ -161,7 +161,7 @@ BODY_NAMES = {BODY_ID: NAME, BARYCENTER: NAME + ' BARYCENTER'}
 
 ALL_MOONS = _srange(601, 667)
 for _body_id in ALL_MOONS:
-    _body_name, _found = CSPYCE.bodc2n(_body_id)
+    _body_name, _found = _CSPYCE.bodc2n(_body_id)
     if _found:
         BODY_IDS[_body_name] = _body_id
         BODY_NAMES[_body_id] = _body_name
@@ -170,7 +170,7 @@ for _body_id in ALL_MOONS:
 _warned = False
 for _body_ids, _body_names in _SATURN_ALIASES:
     try:
-        CSPYCE.define_body_aliases(*(_body_names + _body_ids))
+        _CSPYCE.define_body_aliases(*(_body_names + _body_ids))
     except RuntimeError:
         if not _warned:
             warnings.warn(f'Pool overflow at f{tuple(_body_names + _body_ids)}',
@@ -184,19 +184,21 @@ for _body_ids, _body_names in _SATURN_ALIASES:
         BODY_NAMES[_body_id] = _body_names[0]
 
 # Categorize moons
-CLASSICAL = _srange(601, 609)                       # excludes Phoebe (609) for now
+CLASSICAL = _srange(601, 609)   # excludes Phoebe (609) temporarily
 SMALL_INNER = _srange(610, 619) | _srange(632, 636) | {649, 653}
 REGULAR = CLASSICAL | SMALL_INNER
 
+# Every moon that is not regular is irregular. This is derived by subtraction rather than
+# from the alias table, which would omit any moon that has no alias -- Phoebe among them.
+IRREGULAR = ALL_MOONS - REGULAR
+
 UNNAMED = set()
-IRREGULAR = set()
 for (_body_ids, _body_names) in _SATURN_ALIASES:
-    if not set(_body_ids) & REGULAR:
-        IRREGULAR |= set(_body_ids)
     if '_' in _body_names[0]:
         UNNAMED |= set(_body_ids)
 
-# Add Phoebe as a classical
+# Add Phoebe as a classical. REGULAR is already fixed above, so Phoebe is classical
+# without being regular, and remains among the irregulars.
 CLASSICAL.add(609)
 
 SYSTEM  = {BODY_ID} | CLASSICAL | SMALL_INNER
@@ -206,11 +208,11 @@ ALL_IDS = {BODY_ID} | ALL_MOONS
 # Frames
 ##########################################################################################
 
-FRAME_ID, _frame_name, _found = CSPYCE.cidfrm(NAME)
+FRAME_ID, _frame_name, _found = _CSPYCE.cidfrm(NAME)
 FRAME_IDS = {NAME: FRAME_ID}
 FRAME_CENTERS = {FRAME_ID: BODY_ID}
 for _body_name, _body_id in BODY_IDS.items():
-    _frame_id, _frame_name, _found = CSPYCE.cidfrm(_body_id)
+    _frame_id, _frame_name, _found = _CSPYCE.cidfrm(_body_id)
     if not _found:
         _frame_id = _body_id    # if not already defined, use the body ID as the frame ID
 
@@ -223,31 +225,31 @@ for _body_name, _body_id in BODY_IDS.items():
 
 from ._SATURN_SPKS import _SATURN_SPKS
 
-_spk_source = (_SOURCE + 'spk/satellites', _SOURCE + 'spk/satellites/a_old_versions')
+_spk_source = (_SOURCE_URL + 'spk/satellites',
+               _SOURCE_URL + 'spk/satellites/a_old_versions')
 
-_rule = Rule(r'sat(NNN).*\.bsp', source=_spk_source, dest='Saturn/SPK', planet=NAME,
-             family='Saturn-SPK')
+_rule = _Rule(r'sat(NNN).*\.bsp', source=_spk_source, dest='Saturn/SPK', planet=NAME,
+              family='Saturn-SPK')
 
 _default_body_ids = {False: SYSTEM, True: ALL_IDS}
 
 _spk_docstrings = {'irregular': """\
-        irregular (bool, optional): True to include Saturn's irregular satellites in
-            the returned Kernel object. Otherwise, unless a list of NAIF IDs is
-            explicitly provided, the returned Kernel covers only Saturn's inner
-            satellites.
+        irregular (bool, optional): True to include Saturn's irregular satellites in the
+            returned Kernel object. Otherwise, unless a list of NAIF IDs is explicitly
+            provided, the returned Kernel covers only Saturn's inner satellites.
 """}
 
 spk = _spicefunc('spk',
-                title = 'Saturn satellite SPK',
-                known = _SATURN_SPKS,
-                unknown = _rule.pattern,
-                source = _spk_source,
-                sort = _spk_sort_key,
-                exclude = False,
-                reduce = True,
-                default_ids = _default_body_ids,
-                default_ids_key = ('irregular',),
-                docstrings = _spk_docstrings)
+                 title = 'Saturn satellite SPK',
+                 known = _SATURN_SPKS,
+                 unknown = _rule.pattern,
+                 source = _spk_source,
+                 sort = _spk_sort_key,
+                 exclude = False,
+                 reduce = True,
+                 default_ids = _default_body_ids,
+                 default_ids_key = 'irregular',
+                 docstrings = _spk_docstrings)
 
 ##########################################################################################
 # PCKs
@@ -257,25 +259,26 @@ from ._CASSINI_ROCK_PCKS import _CASSINI_ROCK_PCKS
 from ._SATURN_MST_PCKS import _SATURN_MST_PCKS
 from ._SATURN_SSD_PCKS import _SATURN_SSD_PCKS
 
-_pck_source = _SOURCE + 'pck'
+_pck_source = _SOURCE_URL + 'pck'
 
 _name_to_body_id_set = {k.lower():{v} for k,v in BODY_IDS.items() if '_' not in k}
 
-_rule1 = Rule(r'cpck_rock_(DDMONYYYY)\.tpc', version=1, origin='CASSINI', planet='SATURN',
-              source=_pck_source, dest='Saturn/PCK-Cassini', family='Saturn-Cassini-PCK')
-KernelFile.mutual_veto(_rule1.pattern)                  # never more than one furnished
+_rule1 = _Rule(r'cpck_rock_(DDMONYYYY)\.tpc', version=1, origin='CASSINI',
+               planet='SATURN', source=_pck_source, dest='Saturn/PCK-Cassini',
+               family='Saturn-Cassini-PCK')
+_KernelFile.mutual_veto(_rule1.pattern)  # never more than one furnished
 
-_rule2 = Rule(r'(?P<naif_ids>[a-z]+)_mst201[38]\.bpc', version=1,
-              naif_ids=_name_to_body_id_set, origin='MST', planet='SATURN',
-              source=_pck_source, dest='Saturn/PCK-MST', family='Saturn-MST-PCK')
-KernelFile.shadow(_rule2.pattern, r'pck\d{5}\.tpc')  # supersedes any standard PCK
+_rule2 = _Rule(r'(?P<naif_ids>[a-z]+)_mst201[38]\.bpc', version=1,
+               naif_ids=_name_to_body_id_set, origin='MST', planet='SATURN',
+               source=_pck_source, dest='Saturn/PCK-MST', family='Saturn-MST-PCK')
+_KernelFile.shadow(_rule2.pattern, r'pck\d{5}\.tpc')  # supersedes any standard PCK
 
-_rule3 = Rule(r'(?P<naif_ids>[a-z]+)_ssd_(YYMMDD)_v(N+)\.tpc',
-              naif_ids=_name_to_body_id_set, source=_pck_source, dest='Saturn/PCK-SSD',
-              origin='SSD', planet='SATURN', family='Saturn-SSD-PCK')
-KernelFile.shadow(r'enceladus_ssd_.*\.tpc', r'pck\d{5}.*\.tpc')
-    # According to the documentation, the Enceladus file can only be furnished above the
-    # general PCK.
+_rule3 = _Rule(r'(?P<naif_ids>[a-z]+)_ssd_(YYMMDD)_v(N+)\.tpc',
+               naif_ids=_name_to_body_id_set, source=_pck_source, dest='Saturn/PCK-SSD',
+               origin='SSD', planet='SATURN', family='Saturn-SSD-PCK')
+_KernelFile.shadow(r'enceladus_ssd_.*\.tpc', r'pck\d{5}.*\.tpc')
+# According to the documentation, the Enceladus file can only be furnished above the
+# general PCK.
 
 # Precedence order is Cassini, MST, SSD.
 def _pck_sort_order(basename):
@@ -300,7 +303,7 @@ def _pck_sort_order(basename):
 _pck_notes = """\
     This function generates a Planetary Constants Kernel object for one or more of
     Saturn's satellites. It should be furnished after one of the general PCKs from NAIF,
-    e.g., "pck00011.tpc".
+    e.g., "pck00011.tpc", so that it takes precedence.
 
     The "CASSINI"-origin kernels include masses, shapes, and rotation states of all the
     small, inner moons and all of the irregular satellites known at the time of the
@@ -314,22 +317,26 @@ _pck_notes = """\
 """
 
 _pck_docstrings = {'origin': """\
-        origin (str, set, list, tuple, optional): "CASSINI" for one of the Cassini
-            "rocks" PCKs; "MST" for one or more of the inner satellite rotation models by
-            Matt Tiscareno; "SSD" for a later rotation model from JPL's Solar System
-            Dynamics team. To combine multiple sources, use a set, list, or tuple; None
-            uses all sources.
+        origin (str, set, list, tuple, optional): "CASSINI" for one of the Cassini "rocks"
+            PCKs; "MST" for one or more of the inner satellite rotation models by Matt
+            Tiscareno; "SSD" for a later rotation model from JPL's Solar System Dynamics
+            team. To combine multiple sources, use a set, list, or tuple; None uses all
+            sources.
 """}
 
 pck = _spicefunc('pck',
-                title = 'Saturn satellite PCK',
-                known = _CASSINI_ROCK_PCKS + _SATURN_MST_PCKS + _SATURN_SSD_PCKS,
-                unknown = (_rule1.pattern, _rule3.pattern),
-                source = _pck_source,
-                sort = _pck_sort_order,
-                exclude = False,
-                reduce = True,
-                notes = _pck_notes,
-                docstrings = _pck_docstrings)
+                 title = 'Saturn satellite PCK',
+                 known = _CASSINI_ROCK_PCKS + _SATURN_MST_PCKS + _SATURN_SSD_PCKS,
+                 unknown = (_rule1.pattern, _rule3.pattern),
+                 source = _pck_source,
+                 sort = _pck_sort_order,
+                 exclude = False,
+                 reduce = True,
+                 notes = _pck_notes,
+                 docstrings = _pck_docstrings)
+
+__all__ = ['pck', 'spk', 'ALL_IDS', 'ALL_MOONS', 'BARYCENTER', 'BODY_ID', 'BODY_IDS',
+           'BODY_NAMES', 'CLASSICAL', 'FRAME_CENTERS', 'FRAME_ID', 'FRAME_IDS',
+           'IRREGULAR', 'NAME', 'REGULAR', 'SMALL_INNER', 'SYSTEM', 'UNNAMED']
 
 ##########################################################################################

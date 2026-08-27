@@ -7,7 +7,7 @@ import julian
 import numbers
 import re
 
-from spyceman._cspyce import CSPYCE
+from spyceman._cspyce import _CSPYCE
 from spyceman._ktypes import _EXTENSIONS
 
 ##########################################################################################
@@ -270,12 +270,12 @@ def _naif_id(naif_id):
     naif_name = naif_id
 
     # See if it is a body name
-    naif_id, found = CSPYCE.bodn2c(naif_name)
+    naif_id, found = _CSPYCE.bodn2c(naif_name)
     if found:
         return naif_id
 
     # See if it is a frame name
-    naif_id, found = CSPYCE.namfrm(naif_name)
+    naif_id, found = _CSPYCE.namfrm(naif_name)
     if found:
         return naif_id
 
@@ -330,10 +330,10 @@ def naif_ids_with_aliases(ids):
     # Augment set with all body and frame aliases
     all_ids = ids.copy()
     for naif_id in ids:
-        alias_ids = CSPYCE.get_body_aliases(naif_id)[0]
+        alias_ids = _CSPYCE.get_body_aliases(naif_id)[0]
         all_ids |= set(alias_ids)
 
-        alias_ids = CSPYCE.get_frame_aliases(naif_id)[0]
+        alias_ids = _CSPYCE.get_frame_aliases(naif_id)[0]
         all_ids |= set(alias_ids)
 
     return all_ids
@@ -360,11 +360,11 @@ def naif_ids_wo_aliases(ids):
 
     primary_ids = set()
     for naif_id in ids:
-        alias_ids = CSPYCE.get_body_aliases(naif_id)[0]
+        alias_ids = _CSPYCE.get_body_aliases(naif_id)[0]
         if alias_ids:
             primary_ids.add(alias_ids[0])
 
-        alias_ids = CSPYCE.get_frame_aliases(naif_id)[0]
+        alias_ids = _CSPYCE.get_frame_aliases(naif_id)[0]
         if alias_ids:
             primary_ids.add(alias_ids[0])
 
@@ -403,18 +403,18 @@ def validate_time(time):
 # Support tools for function inputs
 ##########################################################################################
 
-
-def _input_set(value, default=set(), ranges=False):
+def _input_set(value, default=None, ranges=False):
     """Convert an input value to a set of values; return default if input is None.
 
     Note that zero is treated as a value rather than as an empty input.
 
     Parameters:
-        value (object): The value to convert. None, or an empty list, set, or tuple, is
-            replaced by the default.
-        default (object, optional): The value to use when the input is empty. If it is
-            also empty, an empty set is returned.
-        ranges (bool, optional): True to read a two-element list of integers as an
+        value (Any): The value to convert. A list, set, or tuple is converted to a set. If
+            this value is None or empty, `default` is used in its place. Anything else is
+            converted to a set containing this single value.
+        default (Any, optional): The value to use when `value` is empty or None. It is
+            processed the same as `value`, so the return is always a set.
+        ranges (bool, optional): True to read any two-element list of integers as an
             inclusive range and expand it into the integers it spans, matching the
             convention that _test_version() uses for versions. A tuple or set of two is
             not a range; only a list is.
@@ -425,8 +425,9 @@ def _input_set(value, default=set(), ranges=False):
 
     if not value and value != 0:    # None, empty set, list or tuple, but not zero
         value = default
-        if not value and value != 0:
-            return set()
+
+    if not value and value != 0:
+        return set()
 
     if (ranges and isinstance(value, list) and len(value) == 2
             and all(isinstance(v, numbers.Integral) for v in value)):
@@ -444,8 +445,9 @@ def _input_list(value):
     Note that zero is treated as a value rather than as an empty input.
 
     Parameters:
-        value (object): The value to convert. None, or an empty list, set, or tuple,
-            yields an empty list.
+        value (Any): The value to convert. A list, set, or tuple is converted to a list;
+            None is converted to an empty list; anything else becomes the value in a
+            single-element list.
 
     Returns:
         list: The input expressed as a list.

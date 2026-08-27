@@ -31,7 +31,7 @@ meta()      function returning a Metakernel containing all of the above.
 
 import numbers
 
-from spyceman._cspyce      import CSPYCE
+from spyceman._cspyce      import _CSPYCE
 from spyceman._spicefunc   import _spicefunc
 from spyceman._utils       import _input_set, validate_naif_ids, validate_time
 from spyceman.hosts._utils import _intersect_basenames
@@ -291,10 +291,10 @@ Rule(r'vg2_(jup|sat|ura|nep)_qmw_([nw]a)\.bc',
      naif_ids=_DEFAULT_FRAME_IDS[2, 'SCAN_PLATFORM'])
 
 # Note that the QMW kernels do not use the correct frame IDs for ISSNA and ISSWA.
-CSPYCE.define_frame_aliases('VG1_ISSNA', FRAME_IDS['VG1_ISSNA'], -31001)
-CSPYCE.define_frame_aliases('VG1_ISSWA', FRAME_IDS['VG1_ISSWA'], -31002)
-CSPYCE.define_frame_aliases('VG2_ISSNA', FRAME_IDS['VG2_ISSNA'], -32001)
-CSPYCE.define_frame_aliases('VG2_ISSWA', FRAME_IDS['VG2_ISSWA'], -32002)
+_CSPYCE.define_frame_aliases('VG1_ISSNA', FRAME_IDS['VG1_ISSNA'], -31001)
+_CSPYCE.define_frame_aliases('VG1_ISSWA', FRAME_IDS['VG1_ISSWA'], -31002)
+_CSPYCE.define_frame_aliases('VG2_ISSNA', FRAME_IDS['VG2_ISSNA'], -32001)
+_CSPYCE.define_frame_aliases('VG2_ISSWA', FRAME_IDS['VG2_ISSWA'], -32002)
 
 # SEDR CKs
 

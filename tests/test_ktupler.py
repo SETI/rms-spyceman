@@ -12,10 +12,13 @@ Importing this module sets julian's UT model to "SPICE", as the generator does, 
 the times it produces match the ones already in the tables.
 """
 
+import io
+
 import julian
 import pytest
 
 import ktupler
+from spyceman import KernelFile, KTuple
 
 # The start of sat441xl_part-1.bsp, which spans 501 BCE to 4500 CE. Formatted as a date it
 # reads "-501-12-05T23:59:18.816", which julian will produce but cannot parse back.
@@ -150,5 +153,158 @@ def test_unrelated_neighbors_are_ignored(tmp_path):
     (tmp_path / '_MARS_SPKS_v1_backup.py').write_text('not a version\n')
 
     assert ktupler.new_version(path) == tmp_path / '_MARS_SPKS_v2.py'
+
+
+@pytest.fixture
+def emit():
+    """A factory that catalogs one kernel and returns the lines ktupler writes for it.
+
+    Returns:
+        function: Called as emit(basename, tmin, tmax, ids, date); returns the emitted
+            text as a list of lines with no trailing newline.
+    """
+
+    def make(basename, tmin, tmax, ids, date):
+        """Catalog one kernel from its KTuple and emit it.
+
+        Parameters:
+            basename (str): The basename to catalog.
+            tmin (str, float, optional): Start time; None if undefined.
+            tmax (str, float, optional): Stop time; None if undefined.
+            ids (set[int], optional): The NAIF IDs; None if the kernel covers all of them.
+            date (str, optional): The release date; None if unknown.
+
+        Returns:
+            list[str]: The lines ktupler writes for this kernel.
+        """
+
+        KernelFile.set_info(KTuple(basename, tmin, tmax, ids, date))
+        out = io.StringIO()
+        ktupler.print_ktuple(basename, out=out)
+        return out.getvalue().split('\n')[:-1]
+
+    return make
+
+
+def test_the_ktuple_line_is_indented_by_four(emit, unique_name):
+    """Each KTuple opens one level inside the list that holds it.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('indent.bsp')
+    lines = emit(basename, None, None, {499}, '2019-02-14')
+
+    assert lines[0] == f"    KTuple('{basename}',"
+
+
+def test_the_arguments_are_indented_by_eight(emit, unique_name):
+    """Every argument line sits one level inside its KTuple.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('args.bsp')
+    lines = emit(basename, None, None, {499}, '2019-02-14')
+
+    assert lines[1:] == ['        None, None,',
+                         '        {499},',
+                         "        '2019-02-14'),"]
+
+
+def test_an_undefined_release_date_is_emitted_as_none(emit, unique_name):
+    """A kernel with no release date ends with a bare None at the argument indent.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('undated.bsp')
+    lines = emit(basename, None, None, {499}, None)
+
+    assert lines[-1] == '        None),'
+
+
+def test_a_kernel_covering_all_ids_emits_none(emit, unique_name):
+    """An empty ID set is emitted as None rather than as an empty set.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('allids.tls')
+    lines = emit(basename, None, None, None, '2019-02-14')
+
+    assert lines[2] == '        None,'
+
+
+def test_a_wrapped_id_set_stays_within_ninety_columns(emit, unique_name):
+    """No emitted line exceeds the width the package is written to.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('wide.bsp')
+    lines = emit(basename, None, None, set(range(60000, 60100)), '2019-02-14')
+
+    assert max(len(line) for line in lines) <= 90
+
+
+def test_a_wrapped_id_set_fills_the_available_width(emit, unique_name):
+    """Wrapping happens only where the next ID would not fit.
+
+    A line that stops short would still be under the limit, so the test that no line is
+    too wide cannot catch a width set too low.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('full.bsp')
+    lines = emit(basename, None, None, set(range(60000, 60100)), '2019-02-14')
+    id_lines = lines[2:-1]
+
+    assert min(len(line) for line in id_lines[:-1]) > 90 - len('60099, ')
+
+
+def test_wrapped_ids_line_up_under_the_opening_brace(emit, unique_name):
+    """Continuation lines are indented one space past the brace that opens the set.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('aligned.bsp')
+    lines = emit(basename, None, None, set(range(60000, 60100)), '2019-02-14')
+
+    assert lines[3].startswith('         6')
+
+
+def test_the_emitted_text_parses_back_to_the_same_ktuple(emit, unique_name):
+    """What ktupler writes is valid Python that reconstructs the kernel's metadata.
+
+    Parameters:
+        emit (function): Fixture that catalogs a kernel and returns its emitted lines.
+        unique_name (function): Fixture supplying unique basenames.
+    """
+
+    basename = unique_name('roundtrip.bsp')
+    ids = set(range(60000, 60100))
+    text = '\n'.join(emit(basename, None, None, ids, '2019-02-14'))
+
+    namespace = {'KTuple': KTuple}
+    exec(f'_TABLE = [\n{text}\n]', namespace)
+
+    assert namespace['_TABLE'][0] == KTuple(basename, None, None, ids, '2019-02-14')
 
 ##########################################################################################

@@ -163,11 +163,29 @@ class KernelStack(Kernel):
     # Furnished kernel management
     ######################################################################################
 
-    def furnish(self, tmin=None, tmax=None, ids=None, minloc=0):
+    def furnish(self, tmin=None, tmax=None, ids=None):
         """Furnish this Kernel object at highest precedence for the specified range of
         times and the specified set of NAIF IDs.
 
-        This method returns the index of the highest-precedence kernel
+        Each stacked kernel is furnished above the one before it, which is what preserves
+        the stack's order of precedence. Overlapping, excluded kernels are unloaded, and
+        pre-, post-, and co-requisites are furnished as needed.
+
+        Parameters:
+            tmin (float, str, optional): Lower time limit in seconds TDB or as a
+                date-time string; None for all times.
+            tmax (float, str, optional): Upper time limit in seconds TDB or as a
+                date-time string; None for all times.
+            ids (int, set[int], optional): A NAIF ID or set of NAIF IDs; None to ignore
+                NAIF IDs.
+        """
+
+        self._furnish(tmin=tmin, tmax=tmax, ids=ids)
+
+    def _furnish(self, tmin=None, tmax=None, ids=None, *, minloc=0, refloc=None,
+                 reason=''):
+        """Furnish this Kernel object at highest precedence for the specified range of
+        times and the specified set of NAIF IDs.
 
         Each stacked kernel is furnished above the one before it, which is what preserves
         the stack's order of precedence. Overlapping, excluded kernels are unloaded, and
@@ -182,17 +200,47 @@ class KernelStack(Kernel):
                 NAIF IDs.
             minloc (int, optional): An index such that every basename furnished will be
                 at or above this position in the list of furnished kernels.
+            refloc (int, optional): A reference index into the list of furnished kernels,
+                which is tracked as entries below it are removed. None to omit it from
+                the result.
+            reason (str, optional): Why this kernel is being furnished: "prerequisite",
+                "post-requisite", "corequisite", or blank for a direct request. Used in
+                verbose mode.
 
         Returns:
-            int: The index of the highest-precedence basename furnished.
+            int, (int, int): The index of the highest-precedence basename furnished; or
+                that index paired with the updated refloc, if a refloc was given.
         """
 
         for kernel in self._kernels:
-            minloc = Kernel.furnish(kernel, tmin=tmin, tmax=tmax, ids=ids, minloc=minloc)
+            if refloc is None:
+                minloc = kernel._furnish(tmin=tmin, tmax=tmax, ids=ids, minloc=minloc,
+                                         reason=reason)
+            else:
+                minloc, refloc = kernel._furnish(tmin=tmin, tmax=tmax, ids=ids,
+                                                 minloc=minloc, refloc=refloc,
+                                                 reason=reason)
 
-        return minloc
+        if refloc is None:
+            return minloc
 
-    def unload(self, tmin=None, tmax=None, ids=None, refloc=0):
+        return (minloc, refloc)
+
+    def unload(self, tmin=None, tmax=None, ids=None):
+        """Unload any basename of this kernel that overlaps the time range or kernel list.
+
+        Parameters:
+            tmin (float, str, optional): Lower time limit in seconds TDB or as a
+                date-time string; None for all times.
+            tmax (float, str, optional): Upper time limit in seconds TDB or as a
+                date-time string; None for all times.
+            ids (int, set[int], optional): A NAIF ID or set of NAIF IDs; None to ignore
+                NAIF IDs.
+        """
+
+        self._unload(tmin=tmin, tmax=tmax, ids=ids)
+
+    def _unload(self, tmin=None, tmax=None, ids=None, refloc=0, reason=''):
         """Unload any basename of this kernel that overlaps the time range or kernel list.
 
         Parameters:
@@ -204,6 +252,8 @@ class KernelStack(Kernel):
                 NAIF IDs.
             refloc (int, optional): A reference index into the list of furnished kernels,
                 which is tracked as entries below it are removed.
+            reason (str, optional): Why this kernel is being unloaded, used in verbose
+                mode.
 
         Returns:
             int: The new index of the given refloc, decremented once for each basename
@@ -211,7 +261,8 @@ class KernelStack(Kernel):
         """
 
         for kernel in self._kernels:
-            refloc = Kernel.unload(kernel, tmin=tmin, tmax=tmax, ids=ids, refloc=refloc)
+            refloc = kernel._unload(tmin=tmin, tmax=tmax, ids=ids, refloc=refloc,
+                                    reason=reason)
 
         return refloc
 

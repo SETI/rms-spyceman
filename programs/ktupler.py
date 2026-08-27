@@ -30,11 +30,24 @@ import warnings
 import julian
 
 from spyceman.kernelfile  import KernelFile
-from spyceman._cspyce     import CSPYCE
+from spyceman._cspyce     import _CSPYCE
 from spyceman._kernelinfo import _KernelInfo
 from spyceman._ktypes     import _EXTENSIONS
 
 julian.set_ut_model('SPICE')
+
+# Every KTuple is indented one level inside the list that holds it, and its arguments one
+# level inside that.
+_INDENT = 4 * ' '
+_ARG_INDENT = 8 * ' '
+
+# The width the package is written to. A wrapped set of NAIF IDs is preceded by nine
+# characters -- the argument indent plus the "{" that opens the set on the first line, and
+# one space more than that indent on every line after it -- so that is what textwrap has
+# to leave room for.
+_MAX_WIDTH = 90
+_IDS_WIDTH = _MAX_WIDTH - len(_ARG_INDENT) - 1
+
 
 def format_time(tdb):
     """A printable string to represent this TDB time value.
@@ -89,12 +102,12 @@ def print_ktuple(basename, out=None):
 
     try:
         kernel = KernelFile(basename)
-        out.write(f"KTuple('{basename}',\n")
+        out.write(f"{_INDENT}KTuple('{basename}',\n")
 
         (tdb0, tdb1) = kernel.time
         time0 = format_time(tdb0)
         time1 = format_time(tdb1)
-        out.write(f'    {time0}, {time1},\n')
+        out.write(f'{_ARG_INDENT}{time0}, {time1},\n')
 
         naif_ids = list(kernel.naif_ids_as_found)
         if naif_ids:
@@ -102,18 +115,18 @@ def print_ktuple(basename, out=None):
             textlist = [str(k) + ',' for k in naif_ids[:-1]]
             textlist.append(str(naif_ids[-1]) + '},')
             text = ' '.join(textlist)
-            wrapped = textwrap.wrap(text, width=75)
-            out.write('    {' + wrapped[0] + '\n')
+            wrapped = textwrap.wrap(text, width=_IDS_WIDTH)
+            out.write(_ARG_INDENT + '{' + wrapped[0] + '\n')
             for text in wrapped[1:]:
-                out.write('     ' + text + '\n')
+                out.write(_ARG_INDENT + ' ' + text + '\n')
         else:
-            out.write('    None,\n')
+            out.write(f'{_ARG_INDENT}None,\n')
 
         release_date = kernel.release_date
         if not release_date:
-            out.write('    None),\n')
+            out.write(f'{_ARG_INDENT}None),\n')
         else:
-            out.write("    '" + release_date + "'),\n")
+            out.write(_ARG_INDENT + "'" + release_date + "'),\n")
 
     except Exception as e:
         sys.stderr.write('Error in ' + _KernelInfo.ABSPATHS[basename] + ': ' + str(e)
@@ -177,7 +190,6 @@ def summarize_kernels(paths, pattern=None, ktype=None, out=None, known=set()):
 
             # Sort basenames ignoring case, putting un-suffixed names last
             dir_basenames.sort(key=lambda name: name.upper().replace('.', '~.'))
-            out.write('\n')
             for basename in dir_basenames:
                 print_ktuple(basename, out=out)
 
@@ -255,7 +267,7 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     for path in args.furnish:
-        CSPYCE.furnsh(path)
+        _CSPYCE.furnsh(path)
 
     _KernelInfo._USE_RULES           = args.rules
     _KernelInfo._USE_DEFAULT_RULES   = args.rules
@@ -288,7 +300,7 @@ if __name__ == '__main__':
         out.write(before)
         if known:
             out.write('# Inserted '
-                      + datetime.datetime.now().isoformat().partition('.')[0])
+                      + datetime.datetime.now().isoformat().partition('.')[0] + '\n')
     else:
         out = None
         known = []

@@ -34,7 +34,7 @@ CORE_MODULES = [
 ]
 
 # The names that spyceman/__init__.py is expected to export
-PUBLIC_NAMES = ['CSPYCE', 'Kernel', 'KernelFile', 'KernelSet', 'KernelStack', 'KTuple',
+PUBLIC_NAMES = ['Kernel', 'KernelFile', 'KernelSet', 'KernelStack', 'KTuple',
                 'Metakernel', 'Recipe', 'Rule']
 
 

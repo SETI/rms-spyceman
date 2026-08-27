@@ -3,21 +3,20 @@
 ##########################################################################################
 """Support for general Solar System kernels. Last updated 2024-02-01.
 
-The following attributes are defined:
-
-* `lsk()`: Function returning a Kernel object for one of the NAIF LSKs.
-* `pck()`: Function returning a Kernel object for one of the NAIF PCKs.
-* `spk()`: Function returning a Kernel object derived from one or more of the "dynamical
-  ephemeris" SPK files.
+Methods:
+    lsk(): Function returning a Kernel object for one of the NAIF LSKs.
+    pck(): Function returning a Kernel object for one of the NAIF PCKs.
+    spk(): Function returning a Kernel object derived from one or more of the "dynamical
+        ephemeris" SPK files.
 """
 
 import re
 
-from spyceman._cspyce     import CSPYCE
+from spyceman._cspyce     import _CSPYCE
 from spyceman._spicefunc  import _spicefunc
-from spyceman.kernelfile  import KernelFile
-from spyceman.rule        import Rule
-from spyceman.solarsystem import _SOURCE
+from spyceman.kernelfile  import KernelFile as _KernelFile
+from spyceman.rule        import Rule as _Rule
+from spyceman.solarsystem import _SOURCE_URL
 
 ##########################################################################################
 # LSKs
@@ -25,11 +24,11 @@ from spyceman.solarsystem import _SOURCE
 
 from ._NAIF_LSKS import _NAIF_LSKS
 
-_lsk_source = (_SOURCE + 'lsk', _SOURCE + 'lsk/a_old_versions')
+_lsk_source = (_SOURCE_URL + 'lsk', _SOURCE_URL + 'lsk/a_old_versions')
 
-_rule = Rule(r'naif(NNNN).*\.tls', source=_lsk_source, dest='General/LSK',
-             family='NAIF-LSK')
-KernelFile.mutual_veto(_rule.pattern)   # never more than one furnished at a time
+_rule = _Rule(r'naif(NNNN).*\.tls', source=_lsk_source, dest='General/LSK',
+              family='NAIF-LSK')
+_KernelFile.mutual_veto(_rule.pattern)   # never more than one furnished at a time
 
 lsk = _spicefunc('lsk',
                  title = 'NAIF LSKs',
@@ -44,17 +43,17 @@ lsk = _spicefunc('lsk',
 
 from ._NAIF_PCKS import _NAIF_PCKS
 
-_pck_source = (_SOURCE + 'pck', _SOURCE + 'pck/a_old_versions')
+_pck_source = (_SOURCE_URL + 'pck', _SOURCE_URL + 'pck/a_old_versions')
 
-_rule = Rule(r'pck(NNNNN).*\.tpc', source=_pck_source, dest='General/PCK',
-             family='NAIF-PCK')
-KernelFile.mutual_veto(_rule.pattern)   # never more than one furnished at a time
+_rule = _Rule(r'pck(NNNNN).*\.tpc', source=_pck_source, dest='General/PCK',
+              family='NAIF-PCK')
+_KernelFile.mutual_veto(_rule.pattern)   # never more than one furnished at a time
 
 # pck00011.tpc is a special case. There's one version for SPICE Toolkit versions 66 and
 # before; another for versions 67 and after. Compare the release number itself: string
 # comparison happens to order "CSPICE_N0066" correctly today, but would place
 # "CSPICE_N0100" before it.
-_tkvrsn = re.search(r'N(\d+)', CSPYCE.tkvrsn('toolkit'))
+_tkvrsn = re.search(r'N(\d+)', _CSPYCE.tkvrsn('toolkit'))
 _toolkit_release = int(_tkvrsn.group(1)) if _tkvrsn else 0
 
 if _toolkit_release <= 66:
@@ -75,15 +74,15 @@ pck = _spicefunc('pck',
 
 from ._DE_SPKS import _DE_SPKS
 
-_spk_source = (_SOURCE + 'spk/planets', _SOURCE + 'spk/planets/a_old_versions')
+_spk_source = (_SOURCE_URL + 'spk/planets', _SOURCE_URL + 'spk/planets/a_old_versions')
 
 _spk_body_ids = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 199, 299, 301, 399}
 # These SPKs no longer include 499, Mars center
 
-_rule = Rule(r'de(NNN)\.bsp', source=_spk_source, dest='General/SPK',
-             naif_ids=_spk_body_ids, family='DE-SPK',
-             planet={'MERCURY', 'VENUS', 'EARTH', 'MOON', 'MARS', 'JUPITER', 'SATURN',
-                     'URANUS', 'NEPTUNE', 'PLUTO'})
+_rule = _Rule(r'de(NNN).*\.bsp', source=_spk_source, dest='General/SPK',
+              naif_ids=_spk_body_ids, family='DE-SPK',
+              planet={'MERCURY', 'VENUS', 'EARTH', 'MOON', 'MARS', 'JUPITER', 'SATURN',
+              'URANUS', 'NEPTUNE', 'PLUTO'})
 
 def _spk_sort_key(basename):
     """Sort key for the "DE" Solar System SPKs, in increasing order of precedence.

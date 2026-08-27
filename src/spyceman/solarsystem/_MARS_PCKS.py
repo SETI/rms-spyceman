@@ -6,11 +6,10 @@
 from spyceman.kernelfile import KTuple
 
 _MARS_PCKS = [
-
-KTuple('mars_iau2000_v1.tpc',
-    None, None,
-    {4, 401, 402, 499},
-    '2023-01-18'),
+    KTuple('mars_iau2000_v1.tpc',
+        None, None,
+        {4, 401, 402, 499},
+        '2023-01-18'),
 ]
 
 ################################################################################

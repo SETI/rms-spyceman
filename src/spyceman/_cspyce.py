@@ -1,17 +1,17 @@
 ##########################################################################################
 # spyceman/_cspyce.py
 ##########################################################################################
-"""Defines CSPYCE as the cspyce module, with its alias lookups memoized.
+"""Defines _CSPYCE as the cspyce module, with its alias lookups memoized.
 
 To use:
-    from spyceman._cspyce import CSPYCE
-Elsewhere, use "CSPYCE" where you would normally type "cspyce".
+    from spyceman._cspyce import _CSPYCE
+Elsewhere, use "_CSPYCE" where you would normally type "cspyce".
 
-CSPYCE.get_body_aliases() and CSPYCE.get_frame_aliases() are memoized here, because
+_CSPYCE.get_body_aliases() and _CSPYCE.get_frame_aliases() are memoized here, because
 resolving the NAIF IDs of a large kernel catalog calls them tens of thousands of times
 with only a few dozen distinct arguments. Every function that can change SPICE's body or
 frame tables is wrapped to discard the cache, so the memoization is invisible; a caller
-that alters those tables without going through CSPYCE can call clear_alias_caches().
+that alters those tables without going through _CSPYCE can call clear_alias_caches().
 """
 
 import functools
@@ -20,18 +20,18 @@ import cspyce
 import cspyce.aliases
 
 ##########################################################################################
-# Define CSPYCE
+# Define _CSPYCE
 ##########################################################################################
 
-CSPYCE = cspyce
+_CSPYCE = cspyce
 
 # Disable Python errors for a few core functions, so that an unrecognized body or frame
 # reports "not found" rather than raising.
-CSPYCE.bodn2c = cspyce.bodn2c.flag
-CSPYCE.bodc2n = cspyce.bodc2n.flag
-CSPYCE.cidfrm = cspyce.cidfrm.flag
-CSPYCE.namfrm = cspyce.namfrm.flag
-CSPYCE.frmnam = cspyce.frmnam.flag
+_CSPYCE.bodn2c = cspyce.bodn2c.flag
+_CSPYCE.bodc2n = cspyce.bodc2n.flag
+_CSPYCE.cidfrm = cspyce.cidfrm.flag
+_CSPYCE.namfrm = cspyce.namfrm.flag
+_CSPYCE.frmnam = cspyce.frmnam.flag
 
 ##########################################################################################
 # Memoize the alias lookups
@@ -64,7 +64,7 @@ def clear_alias_caches():
     """Discard the memoized results of get_body_aliases() and get_frame_aliases().
 
     This is called automatically whenever SPICE's body or frame tables can have changed,
-    so it is needed only by a caller that reaches past CSPYCE to alter those tables.
+    so it is needed only by a caller that reaches past _CSPYCE to alter those tables.
     """
 
     _BODY_ALIAS_CACHE.clear()
@@ -142,16 +142,16 @@ def _clear_caches_after(func):
     return wrapper
 
 
-CSPYCE.get_body_aliases = _memoize_alias_lookup(CSPYCE.get_body_aliases,
+_CSPYCE.get_body_aliases = _memoize_alias_lookup(_CSPYCE.get_body_aliases,
                                                 _BODY_ALIAS_CACHE)
-CSPYCE.get_frame_aliases = _memoize_alias_lookup(CSPYCE.get_frame_aliases,
+_CSPYCE.get_frame_aliases = _memoize_alias_lookup(_CSPYCE.get_frame_aliases,
                                                  _FRAME_ALIAS_CACHE)
 
 # No hasattr() guard: a name that cspyce stops providing must fail here rather than
 # leave that mutator unwrapped, because an unwrapped mutator makes the caches go stale
 # silently and every NAIF ID resolved afterward is suspect.
 for _name in _MUTATORS:
-    setattr(CSPYCE, _name, _clear_caches_after(getattr(CSPYCE, _name)))
+    setattr(_CSPYCE, _name, _clear_caches_after(getattr(_CSPYCE, _name)))
 
 del _name
 

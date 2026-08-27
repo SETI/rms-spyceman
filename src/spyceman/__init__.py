@@ -2,8 +2,6 @@
 # spyceman/__init__.py
 ##########################################################################################
 
-from spyceman._cspyce     import CSPYCE
-
 from spyceman.kernel      import Kernel
 from spyceman.kernelfile  import KernelFile, KTuple
 from spyceman.kernelset   import KernelSet
@@ -17,7 +15,7 @@ try:
 except ImportError:                         # pragma nocover
     __version__ = 'Version unspecified'
 
-__all__ = ['CSPYCE', 'Kernel', 'KernelFile', 'KTuple', 'KernelSet', 'KernelStack',
-           'Metakernel', 'Recipe', 'Rule']
+__all__ = ['Kernel', 'KernelFile', 'KTuple', 'KernelSet', 'KernelStack', 'Metakernel',
+           'Recipe', 'Rule']
 
 ##########################################################################################
